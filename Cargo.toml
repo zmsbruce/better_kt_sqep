@@ -2,3 +2,7 @@
 name = "better_kt_sqep"
 version = "0.1.0"
 edition = "2024"
+
+[dependencies]
+im = "15.1.0"
+thiserror = "2.0.12"
