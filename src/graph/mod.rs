@@ -1,20 +1,25 @@
+//! 教学知识图谱模块，提供了一个支持撤回和重做操作的知识图谱数据结构。
+//!
+//! # 支持
+//! - 只支持教学知识图谱，不支持能力知识图谱；
+//! - 节点不支持资源型独立实体类型；
+
 use im::{HashMap, Vector};
 
 use crate::error::GraphError;
-pub use node::{EntityNode, Relation};
-pub use types::{AddonEntityType, DistinctEntityType, EntityId};
+pub use node::{AddonEntityType, DistinctEntityType, EntityNode, Relation};
 
+mod codec;
 mod node;
-mod types;
 
 /// 知识图谱快照，用于撤回和重做。
 /// 使用了 im crate 提供的持久化数据结构，避免了不必要的数据复制，提高了性能。
 /// 详见：https://docs.rs/im/15.0.0/im/
 #[derive(Debug, Clone)]
 struct Snapshot {
-    nodes: HashMap<EntityId, EntityNode>,
-    edges: HashMap<(EntityId, EntityId), Relation>,
-    latest_id: EntityId,
+    nodes: HashMap<u64, EntityNode>,
+    edges: HashMap<(u64, u64), Relation>,
+    latest_id: u64,
 }
 
 impl Default for Snapshot {
@@ -115,7 +120,8 @@ impl KnowledgeGraph {
         content: String,
         distinct_type: DistinctEntityType,
         addon_types: &[AddonEntityType],
-    ) -> EntityId {
+        coor: (f64, f64),
+    ) -> u64 {
         self.before_mutation(); // 记录快照
 
         // 生成新节点 ID
@@ -124,16 +130,17 @@ impl KnowledgeGraph {
         current.latest_id += 1;
 
         // 插入新节点
-        current
-            .nodes
-            .insert(id, EntityNode::new(content, distinct_type, addon_types));
+        current.nodes.insert(
+            id,
+            EntityNode::new(id, content, distinct_type, addon_types, coor),
+        );
 
         id
     }
 
     /// 删除一个节点及其关联的边
     /// 如果节点不存在，返回错误。
-    pub fn remove_entity(&mut self, id: EntityId) -> Result<(), GraphError> {
+    pub fn remove_entity(&mut self, id: u64) -> Result<(), GraphError> {
         self.before_mutation(); // 记录快照
 
         // 删除节点，如果节点不存在则返回错误
@@ -154,10 +161,11 @@ impl KnowledgeGraph {
     /// 如果节点不存在，返回错误。
     pub fn update_entity(
         &mut self,
-        id: EntityId,
+        id: u64,
         content: String,
         distinct_type: DistinctEntityType,
         addon_types: &[AddonEntityType],
+        coor: (f64, f64),
     ) -> Result<(), GraphError> {
         self.before_mutation(); // 记录快照
 
@@ -166,7 +174,7 @@ impl KnowledgeGraph {
             .nodes
             .get_mut(&id)
             .map_or(Err(GraphError::EntityNotFound(id)), |node| {
-                node.update(content, distinct_type, addon_types);
+                node.update(content, distinct_type, addon_types, coor);
 
                 Ok(())
             })
@@ -174,12 +182,7 @@ impl KnowledgeGraph {
 
     /// 添加一条边。
     /// 如果节点 ID 不存在，或边已经存在，返回错误。
-    pub fn add_edge(
-        &mut self,
-        from: EntityId,
-        to: EntityId,
-        relation: Relation,
-    ) -> Result<(), GraphError> {
+    pub fn add_edge(&mut self, from: u64, to: u64, relation: Relation) -> Result<(), GraphError> {
         self.before_mutation(); // 记录快照
 
         // 检查节点是否存在
@@ -203,7 +206,7 @@ impl KnowledgeGraph {
 
     /// 删除一条边
     /// 如果边不存在，返回错误。
-    pub fn remove_edge(&mut self, from: EntityId, to: EntityId) -> Result<(), GraphError> {
+    pub fn remove_edge(&mut self, from: u64, to: u64) -> Result<(), GraphError> {
         self.before_mutation(); // 记录快照
 
         // 删除边，如果边不存在则返回错误
@@ -217,8 +220,8 @@ impl KnowledgeGraph {
     /// 修改边关系
     pub fn update_edge(
         &mut self,
-        from: EntityId,
-        to: EntityId,
+        from: u64,
+        to: u64,
         relation: Relation,
     ) -> Result<(), GraphError> {
         self.before_mutation(); // 记录快照
@@ -238,7 +241,7 @@ mod tests {
     use super::*;
 
     fn default_distinct() -> DistinctEntityType {
-        DistinctEntityType::Document
+        DistinctEntityType::KnowledgePoint
     }
 
     fn default_addons() -> Vec<AddonEntityType> {
@@ -255,11 +258,20 @@ mod tests {
         Relation::Contain
     }
 
+    fn default_coor() -> (f64, f64) {
+        (0.0, 0.0)
+    }
+
     #[test]
     fn test_add_entity() {
         let mut graph = KnowledgeGraph::new(10);
         let content = "Test Node".to_string();
-        let id = graph.add_entity(content.clone(), default_distinct(), &default_addons());
+        let id = graph.add_entity(
+            content.clone(),
+            default_distinct(),
+            &default_addons(),
+            default_coor(),
+        );
 
         // 检查节点是否存在
         assert!(graph.current.nodes.contains_key(&id));
@@ -278,6 +290,7 @@ mod tests {
             "Node to remove".to_string(),
             default_distinct(),
             &default_addons(),
+            default_coor(),
         );
         // 检查节点是否存在
         assert!(graph.current.nodes.contains_key(&id));
@@ -300,6 +313,7 @@ mod tests {
             "Old Content".to_string(),
             default_distinct(),
             &default_addons(),
+            default_coor(),
         );
         // 更新节点内容
         assert!(
@@ -308,7 +322,8 @@ mod tests {
                     id,
                     "New Content".to_string(),
                     default_distinct(),
-                    &default_addons()
+                    &default_addons(),
+                    default_coor(),
                 )
                 .is_ok()
         );
@@ -323,6 +338,7 @@ mod tests {
             "No Node".to_string(),
             default_distinct(),
             &default_addons(),
+            default_coor(),
         ) {
             Err(GraphError::EntityNotFound(eid)) => assert_eq!(eid, 999),
             _ => panic!("Expected EntityNotFound error"),
@@ -336,8 +352,14 @@ mod tests {
             "From Node".to_string(),
             default_distinct(),
             &default_addons(),
+            default_coor(),
         );
-        let to = graph.add_entity("To Node".to_string(), default_distinct(), &default_addons());
+        let to = graph.add_entity(
+            "To Node".to_string(),
+            default_distinct(),
+            &default_addons(),
+            default_coor(),
+        );
 
         // 添加边
         assert!(graph.add_edge(from, to, default_relation()).is_ok());
@@ -377,6 +399,7 @@ mod tests {
             "Undo Node".to_string(),
             default_distinct(),
             &default_addons(),
+            default_coor(),
         );
         assert!(graph.current.nodes.contains_key(&id));
         // 撤回操作会移除节点
@@ -404,7 +427,12 @@ mod tests {
         let mut graph = KnowledgeGraph::new(3); // Set maximum history to 3.
         // 添加 5 个节点
         for i in 0..5 {
-            graph.add_entity(format!("Node {}", i), default_distinct(), &default_addons());
+            graph.add_entity(
+                format!("Node {}", i),
+                default_distinct(),
+                &default_addons(),
+                default_coor(),
+            );
         }
         // 撤回栈应该不超过 3
         assert!(graph.undo_stack.len() <= 3);

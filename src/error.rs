@@ -1,15 +1,13 @@
 use thiserror::Error;
 
-use crate::graph::EntityId;
-
 #[derive(Debug, Error)]
 pub enum GraphError {
     #[error("entity {0} not found")]
-    EntityNotFound(EntityId),
+    EntityNotFound(u64),
     #[error("edge ({0}, {1}) not found")]
-    EdgeNotFound(EntityId, EntityId),
+    EdgeNotFound(u64, u64),
     #[error("edge ({0}, {1}) already exists")]
-    EdgeAlreadyExists(EntityId, EntityId),
+    EdgeAlreadyExists(u64, u64),
     #[error("nothing to undo")]
     NothingToUndo,
     #[error("nothing to redo")]
