@@ -16,7 +16,7 @@ mod node;
 /// 使用了 im crate 提供的持久化数据结构，避免了不必要的数据复制，提高了性能。
 /// 详见：https://docs.rs/im/15.0.0/im/
 #[derive(Debug, Clone)]
-struct Snapshot {
+pub struct Snapshot {
     nodes: HashMap<u64, EntityNode>,
     edges: HashMap<(u64, u64), Relation>,
     latest_id: u64,
@@ -234,6 +234,12 @@ impl KnowledgeGraph {
                 Ok(())
             },
         )
+    }
+
+    /// 获取当前快照
+    #[inline]
+    pub fn current_snapshot(&self) -> &Snapshot {
+        &self.current
     }
 }
 #[cfg(test)]

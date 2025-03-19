@@ -2,8 +2,6 @@
 
 use std::collections::HashSet;
 
-use super::codec::SerializableEntity;
-
 /// 实体节点
 #[derive(Debug, Clone)]
 pub struct EntityNode {
@@ -76,21 +74,14 @@ impl EntityNode {
     pub fn id(&self) -> u64 {
         self.id
     }
-
-    /// 序列化为 XML 格式
-    #[inline]
-    pub fn to_xml(&self) -> Result<String, quick_xml::SeError> {
-        SerializableEntity::from(self).to_xml()
-    }
 }
 
 // 关系类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Relation {
-    Contain,         // 包含关系
-    Order,           // 次序关系
-    KeyOrder,        // 关键次序
-    ResourceConnect, // 连接资源
+    Contain,  // 包含关系
+    Order,    // 次序关系
+    KeyOrder, // 关键次序
 }
 
 /// 实体类型

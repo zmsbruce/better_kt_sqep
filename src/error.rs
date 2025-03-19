@@ -13,3 +13,13 @@ pub enum GraphError {
     #[error("nothing to redo")]
     NothingToRedo,
 }
+
+#[derive(Debug, Error)]
+pub enum SerdeError {
+    #[error("failed to serialize to xml")]
+    Serialize(#[from] quick_xml::SeError),
+    #[error("failed to deserialize from xml")]
+    Deserialize(#[from] quick_xml::DeError),
+    #[error("failed to parse utf8 string")]
+    Utf8(#[from] std::str::Utf8Error),
+}

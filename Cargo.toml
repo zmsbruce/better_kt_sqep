@@ -9,3 +9,6 @@ lazy_static = "1.5.0"
 quick-xml = { version = "0.37.2", features = ["serde", "serialize"] }
 serde = { version = "1.0.219", features = ["derive"] }
 thiserror = "2.0.12"
+
+[dev-dependencies]
+regex = "1.11.1"
