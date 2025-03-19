@@ -2,18 +2,13 @@
 
 use std::collections::HashSet;
 
-use lazy_static::lazy_static;
-use serde::Serialize;
+use im::HashMap;
+use serde::{Deserialize, Serialize};
 
 use super::{AddonEntityType, DistinctEntityType, EntityNode, Relation, Snapshot};
 
-lazy_static! {
-    // 空附加实体类型，用于默认值
-    static ref EMPTY_ADDONS: HashSet<AddonEntityType> = HashSet::new();
-}
-
 /// 转义非 ASCII 字符
-pub fn escape_non_ascii(input: &str) -> String {
+fn escape_non_ascii(input: &str) -> String {
     input
         .chars()
         .map(|c| {
@@ -26,55 +21,106 @@ pub fn escape_non_ascii(input: &str) -> String {
         .collect()
 }
 
+/// 将转义后的非 ASCII 字符还原
+fn unescape_non_ascii(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '&' {
+            if let Some('#') = chars.next() {
+                let mut char_code = 0;
+                for digit in chars.by_ref() {
+                    if digit == ';' {
+                        break;
+                    }
+                    char_code = char_code * 10 + digit.to_digit(10).unwrap();
+                }
+                result.push(char::from_u32(char_code).unwrap());
+            } else {
+                result.push(c);
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
 /// 可序列化的实体节点
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "entity")]
-struct SerializableEntity<'a> {
+struct SerializableEntity {
     id: u64,
-    class_name: &'static str,
-    classification: &'static str,
-    identity: &'static str,
-    level: &'static str,
-    #[serde(serialize_with = "serialize_addon_types")]
-    attach: &'a HashSet<AddonEntityType>,
-    opentool: &'static str,
-    content: &'a str,
+    class_name: String,
+    classification: String,
+    identity: String,
+    level: String,
+    #[serde(
+        serialize_with = "serialize_addon_types",
+        deserialize_with = "deserialize_addon_types"
+    )]
+    attach: HashSet<AddonEntityType>,
+    opentool: String,
+    content: String,
     x: f64,
     y: f64,
 }
 
-impl Default for SerializableEntity<'_> {
+impl Default for SerializableEntity {
     fn default() -> Self {
         Self {
             id: 0,
-            class_name: "",
-            classification: "内容方法型节点",
-            identity: "知识",
-            level: "",
-            attach: &EMPTY_ADDONS,
-            opentool: "无",
-            content: "",
+            class_name: String::new(),
+            classification: "内容方法型节点".to_string(),
+            identity: "知识".to_string(),
+            level: String::new(),
+            attach: HashSet::new(),
+            opentool: "无".to_string(),
+            content: String::new(),
             x: 0.0,
             y: 0.0,
         }
     }
 }
 
-impl<'a> From<&'a EntityNode> for SerializableEntity<'a> {
-    fn from(node: &'a EntityNode) -> Self {
+impl From<&EntityNode> for SerializableEntity {
+    fn from(node: &EntityNode) -> Self {
         let distinct_type = node.distinct_type();
         let coor = node.coor();
 
         Self {
             id: node.id(),
-            class_name: distinct_type.class_name(),
-            level: distinct_type.level(),
-            attach: node.addon_types(),
-            content: node.content(),
+            class_name: distinct_type.class_name().to_string(),
+            level: distinct_type.level().to_string(),
+            attach: node.addon_types().clone(),
+            content: node.content().to_string(),
             x: coor.0,
             y: coor.1,
             ..Default::default()
         }
+    }
+}
+
+impl From<SerializableEntity> for EntityNode {
+    fn from(value: SerializableEntity) -> Self {
+        // 根据 class_name 确定实体类型
+        let distinct_type = match value.class_name.as_str() {
+            "知识领域" => DistinctEntityType::KnowledgeArena,
+            "知识单元" => DistinctEntityType::KnowledgeUnit,
+            "知识点" => DistinctEntityType::KnowledgePoint,
+            "关键知识细节" => DistinctEntityType::KnowledgeDetail,
+            _ => unreachable!(),
+        };
+
+        Self::new(
+            value.id,
+            value.content,
+            distinct_type,
+            &value.attach.iter().copied().collect::<Vec<_>>(),
+            (value.x, value.y),
+        )
     }
 }
 
@@ -101,6 +147,16 @@ impl DistinctEntityType {
     }
 }
 
+/// 附加实体类型，顺序是固定的，即 T Z Q K E P
+const ADDON_TYPES: [AddonEntityType; 6] = [
+    AddonEntityType::Thinking,
+    AddonEntityType::Political,
+    AddonEntityType::Question,
+    AddonEntityType::Knowledge,
+    AddonEntityType::Example,
+    AddonEntityType::Practice,
+];
+
 /// 序列化附加实体类型
 fn serialize_addon_types<S>(
     addon_types: &HashSet<AddonEntityType>,
@@ -111,17 +167,8 @@ where
 {
     let mut result = String::with_capacity(6);
 
-    for addon in [
-        AddonEntityType::Thinking,
-        AddonEntityType::Political,
-        AddonEntityType::Question,
-        AddonEntityType::Knowledge,
-        AddonEntityType::Example,
-        AddonEntityType::Practice,
-    ]
-    .iter()
-    // 顺序是固定的，即 T Z Q K E P
-    {
+    // 根据 addon 是否在 addon_types 中决定是否添加对应的字符
+    for addon in ADDON_TYPES.iter() {
         result.push(if addon_types.contains(addon) {
             '1'
         } else {
@@ -132,46 +179,74 @@ where
     serializer.serialize_str(&result)
 }
 
-/// 可序列化的关系
-#[derive(Debug, Serialize)]
-#[serde(rename = "relation")]
-struct SerializableRelation {
-    name: &'static str,
-    headnodeid: u64,
-    tailnodeid: u64,
-    class_name: &'static str,
-    mask: &'static str,
-    classification: &'static str,
-    head_need: &'static str,
-    tail_need: &'static str,
+fn deserialize_addon_types<'de, D>(deserializer: D) -> Result<HashSet<AddonEntityType>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // 将输入字符串反序列化
+    let s = String::deserialize(deserializer)?;
+    let mut set = HashSet::new();
+
+    // 根据字符是否为'1'决定是否添加对应的 addon
+    for (c, addon) in s.chars().zip(ADDON_TYPES.iter()) {
+        if c == '1' {
+            set.insert(*addon);
+        }
+    }
+    Ok(set)
 }
 
-impl Default for SerializableRelation {
+/// 可序列化的边
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename = "relation")]
+struct SerializableEdge {
+    name: String,
+    headnodeid: u64,
+    tailnodeid: u64,
+    class_name: String,
+    mask: String,
+    classification: String,
+    head_need: String,
+    tail_need: String,
+}
+
+impl Default for SerializableEdge {
     fn default() -> Self {
         Self {
-            name: "包含",
+            name: "包含".to_string(),
             headnodeid: 0,
             tailnodeid: 0,
-            class_name: "",
-            mask: "知识连线",
-            classification: "",
-            head_need: "内容方法型节点",
-            tail_need: "内容方法型节点",
+            class_name: String::new(),
+            mask: "知识连线".to_string(),
+            classification: String::new(),
+            head_need: "内容方法型节点".to_string(),
+            tail_need: "内容方法型节点".to_string(),
         }
     }
 }
 
-impl From<&((u64, u64), Relation)> for SerializableRelation {
-    fn from(value: &((u64, u64), Relation)) -> Self {
-        let ((head_id, tail_id), relation) = value;
-
+impl SerializableEdge {
+    /// 从边创建可序列化的边
+    pub fn from_edge(from: u64, to: u64, relation: Relation) -> Self {
         Self {
-            headnodeid: *head_id,
-            tailnodeid: *tail_id,
-            class_name: relation.class_name(),
-            classification: relation.classification(),
+            headnodeid: from,
+            tailnodeid: to,
+            class_name: relation.class_name().to_string(),
+            classification: relation.classification().to_string(),
             ..Default::default()
         }
+    }
+
+    /// 将可序列化的边转换为边
+    pub fn to_edge(&self) -> (u64, u64, Relation) {
+        let relation = match self.class_name.as_str() {
+            "包含关系" => Relation::Contain,
+            "次序：次序关系" => Relation::Order,
+            "次序：关键次序" => Relation::KeyOrder,
+            _ => unreachable!(),
+        };
+
+        (self.headnodeid, self.tailnodeid, relation)
     }
 }
 
@@ -195,51 +270,86 @@ impl Relation {
 }
 
 /// 可序列化的快照
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "KG")]
-struct SerializableSnapshot<'a> {
+struct SerializableSnapshot {
     #[serde(rename = "$value")]
-    title: &'static str,
-    entities: Entities<'a>,
+    title: String,
+    entities: Entities,
     relations: Relations,
 }
 
 /// 实体包装器
-#[derive(Debug, Serialize)]
-struct Entities<'a> {
+#[derive(Debug, Serialize, Deserialize)]
+struct Entities {
     #[serde(rename = "entity")]
-    entities: Vec<SerializableEntity<'a>>,
+    entities: Vec<SerializableEntity>,
 }
 
 /// 关系包装器
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Relations {
     #[serde(rename = "relation")]
-    pub items: Vec<SerializableRelation>,
+    pub items: Vec<SerializableEdge>,
 }
 
-impl<'a> From<&'a Snapshot> for SerializableSnapshot<'a> {
-    fn from(value: &'a Snapshot) -> Self {
+impl From<&Snapshot> for SerializableSnapshot {
+    fn from(value: &Snapshot) -> Self {
+        // 将实体节点转换为可序列化的实体节点
         let entities = value
             .nodes
             .iter()
             .map(|(_, node)| SerializableEntity::from(node))
             .collect();
+
+        // 将边转换为可序列化的边
         let relations = value
             .edges
             .iter()
-            .map(|(&(head, tail), relation)| SerializableRelation::from(&((head, tail), *relation)))
+            .map(|(&(head, tail), relation)| SerializableEdge::from_edge(head, tail, *relation))
             .collect();
 
         Self {
-            title: "教学知识图谱",
+            title: "教学知识图谱".to_string(),
             entities: Entities { entities },
             relations: Relations { items: relations },
         }
     }
 }
 
-impl SerializableSnapshot<'_> {
+impl From<SerializableSnapshot> for Snapshot {
+    fn from(value: SerializableSnapshot) -> Self {
+        // 将实体节点转换为哈希表
+        let nodes: HashMap<_, _> = value
+            .entities
+            .entities
+            .into_iter()
+            .map(|entity| (entity.id, EntityNode::from(entity)))
+            .collect();
+
+        // 将边转换为哈希表
+        let edges = value
+            .relations
+            .items
+            .into_iter()
+            .map(|edge| {
+                let (from, to, relation) = edge.to_edge();
+                ((from, to), relation)
+            })
+            .collect();
+
+        // 获取最大的节点 ID
+        let latest_id = nodes.keys().max().copied().unwrap_or(0) + 1;
+
+        Self {
+            nodes,
+            edges,
+            latest_id,
+        }
+    }
+}
+
+impl SerializableSnapshot {
     /// 将快照转换为 XML 格式
     pub fn to_xml(&self) -> Result<String, quick_xml::SeError> {
         // 序列化为 XML 字符串
@@ -248,12 +358,28 @@ impl SerializableSnapshot<'_> {
         // 转义非 ASCII 字符
         Ok(escape_non_ascii(&content))
     }
+
+    /// 从 XML 字符串解析快照
+    pub fn from_xml(xml: &str) -> Result<Self, quick_xml::DeError> {
+        // 还原非 ASCII 字符
+        let xml = unescape_non_ascii(xml);
+
+        // 解析 XML 字符串
+        quick_xml::de::from_str(&xml)
+    }
 }
 
 impl Snapshot {
     /// 将快照转换为 XML 格式
+    #[inline]
     pub fn to_xml(&self) -> Result<String, quick_xml::SeError> {
         SerializableSnapshot::from(self).to_xml()
+    }
+
+    /// 从 XML 字符串解析快照
+    #[inline]
+    pub fn from_xml(xml: &str) -> Result<Self, quick_xml::DeError> {
+        SerializableSnapshot::from_xml(xml).map(Snapshot::from)
     }
 }
 
@@ -322,14 +448,13 @@ mod tests {
             "<relation><name>&#21253;&#21547;</name><headnodeid>114514</headnodeid><tailnodeid>1919810</tailnodeid><class_name>&#27425;&#24207;&#65306;&#27425;&#24207;&#20851;&#31995;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#27425;&#24207;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>",
             "<relation><name>&#21253;&#21547;</name><headnodeid>114514</headnodeid><tailnodeid>1919810</tailnodeid><class_name>&#27425;&#24207;&#65306;&#20851;&#38190;&#27425;&#24207;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#27425;&#24207;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>",
         ];
-        for (relation, xml_gt) in relations.iter().zip(xmls.iter()) {
-            let xml = to_xml(SerializableRelation::from(relation)).unwrap();
+        for (((head, tail), relation), xml_gt) in relations.iter().zip(xmls.iter()) {
+            let xml = to_xml(SerializableEdge::from_edge(*head, *tail, *relation)).unwrap();
             assert_eq!(xml, *xml_gt);
         }
     }
 
-    #[test]
-    fn test_encode_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+    fn create_knowledge_graph() -> Result<KnowledgeGraph, Box<dyn std::error::Error>> {
         let mut knowledge_graph = KnowledgeGraph::new(0);
 
         let id_1 = knowledge_graph.add_entity(
@@ -372,6 +497,12 @@ mod tests {
         knowledge_graph.add_edge(id_1, id_3, Relation::Contain)?;
         knowledge_graph.add_edge(id_3, id_4, Relation::Order)?;
 
+        Ok(knowledge_graph)
+    }
+
+    #[test]
+    fn test_encode_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+        let knowledge_graph = create_knowledge_graph()?;
         let xml = knowledge_graph.current_snapshot().to_xml()?;
 
         // 检查 XML 结构是否正确
@@ -386,6 +517,18 @@ mod tests {
         assert!(xml.contains("<relation><name>&#21253;&#21547;</name><headnodeid>1</headnodeid><tailnodeid>2</tailnodeid><class_name>&#21253;&#21547;&#20851;&#31995;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#21253;&#21547;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>"));
         assert!(xml.contains("<relation><name>&#21253;&#21547;</name><headnodeid>1</headnodeid><tailnodeid>3</tailnodeid><class_name>&#21253;&#21547;&#20851;&#31995;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#21253;&#21547;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>"));
         assert!(xml.contains("<relation><name>&#21253;&#21547;</name><headnodeid>3</headnodeid><tailnodeid>4</tailnodeid><class_name>&#27425;&#24207;&#65306;&#27425;&#24207;&#20851;&#31995;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#27425;&#24207;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_decode_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+        let knowledge_graph = create_knowledge_graph()?;
+        let snapshot = knowledge_graph.current_snapshot();
+        let xml = snapshot.to_xml()?;
+
+        let snapshot_decoded = Snapshot::from_xml(&xml)?;
+        assert_eq!(*snapshot, snapshot_decoded);
 
         Ok(())
     }

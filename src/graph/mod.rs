@@ -15,7 +15,7 @@ mod node;
 /// 知识图谱快照，用于撤回和重做。
 /// 使用了 im crate 提供的持久化数据结构，避免了不必要的数据复制，提高了性能。
 /// 详见：https://docs.rs/im/15.0.0/im/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Snapshot {
     nodes: HashMap<u64, EntityNode>,
     edges: HashMap<(u64, u64), Relation>,

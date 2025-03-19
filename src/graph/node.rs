@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 /// 实体节点
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EntityNode {
     id: u64,
     content: String,
