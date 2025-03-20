@@ -33,6 +33,7 @@ fn main() {
                 .or_default()
                 .insert(0, "NotoSansSC-Regular".to_string());
             cc.egui_ctx.set_fonts(fonts);
+            cc.egui_ctx.set_visuals(egui::Visuals::light());
 
             Ok(Box::new(app))
         }),

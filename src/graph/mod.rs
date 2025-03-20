@@ -213,11 +213,6 @@ impl KnowledgeGraph {
             return Err(GraphError::EntityNotFound(to));
         }
 
-        // 检查边是否已经存在
-        if current.edges.contains_key(&(from, to)) {
-            return Err(GraphError::EdgeAlreadyExists(from, to));
-        }
-
         current.edges.insert((from, to), relation);
 
         Ok(())
@@ -388,14 +383,9 @@ mod tests {
         assert!(graph.add_edge(from, to, default_relation()).is_ok());
         assert!(graph.current.edges.contains_key(&(from, to)));
 
-        // 添加重复的边应该失败
-        match graph.add_edge(from, to, default_relation()) {
-            Err(GraphError::EdgeAlreadyExists(f, t)) => {
-                assert_eq!(f, from);
-                assert_eq!(t, to);
-            }
-            _ => panic!("Expected EdgeAlreadyExists error"),
-        }
+        // 添加重复的边
+        assert!(graph.add_edge(from, to, Relation::Order).is_ok());
+        assert!(graph.current.edges.contains_key(&(from, to)));
 
         // 更新边
         assert!(graph.update_edge(from, to, default_relation()).is_ok());
