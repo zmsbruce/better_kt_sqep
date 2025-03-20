@@ -5,11 +5,11 @@ use std::collections::HashSet;
 /// 实体节点
 #[derive(Debug, Clone, PartialEq)]
 pub struct EntityNode {
-    id: u64,
-    content: String,
-    distinct_type: DistinctEntityType,
-    addon_types: HashSet<AddonEntityType>,
-    coor: (f64, f64),
+    pub id: u64,
+    pub content: String,
+    pub distinct_type: DistinctEntityType,
+    pub addon_types: HashSet<AddonEntityType>,
+    pub coor: (f64, f64),
 }
 
 impl EntityNode {
@@ -44,48 +44,18 @@ impl EntityNode {
         self.addon_types = addon_types.iter().copied().collect();
         self.coor = coor;
     }
-
-    /// 获取实体节点内容
-    #[inline]
-    pub fn content(&self) -> &str {
-        &self.content
-    }
-
-    /// 获取实体节点类型
-    #[inline]
-    pub fn distinct_type(&self) -> DistinctEntityType {
-        self.distinct_type
-    }
-
-    /// 获取实体节点附加类型
-    #[inline]
-    pub fn addon_types(&self) -> &HashSet<AddonEntityType> {
-        &self.addon_types
-    }
-
-    /// 获取实体节点坐标
-    #[inline]
-    pub fn coor(&self) -> (f64, f64) {
-        self.coor
-    }
-
-    /// 获取实体节点 ID
-    #[inline]
-    pub fn id(&self) -> u64 {
-        self.id
-    }
 }
 
 // 关系类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Relation {
-    Contain,  // 包含关系
-    Order,    // 次序关系
-    KeyOrder, // 关键次序
+    Contain, // 包含关系
+    Order,   // 次序关系
 }
 
 /// 实体类型
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(clippy::enum_variant_names)]
 pub enum DistinctEntityType {
     KnowledgeArena,  // 知识领域
     KnowledgeUnit,   // 知识单元

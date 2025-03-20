@@ -87,15 +87,15 @@ impl Default for SerializableEntity {
 
 impl From<&EntityNode> for SerializableEntity {
     fn from(node: &EntityNode) -> Self {
-        let distinct_type = node.distinct_type();
-        let coor = node.coor();
+        let distinct_type = node.distinct_type;
+        let coor = node.coor;
 
         Self {
-            id: node.id(),
+            id: node.id,
             class_name: distinct_type.class_name().to_string(),
             level: distinct_type.level().to_string(),
-            attach: node.addon_types().clone(),
-            content: node.content().to_string(),
+            attach: node.addon_types.clone(),
+            content: node.content.to_string(),
             x: coor.0,
             y: coor.1,
             ..Default::default()
@@ -242,7 +242,6 @@ impl SerializableEdge {
         let relation = match self.class_name.as_str() {
             "包含关系" => Relation::Contain,
             "次序：次序关系" => Relation::Order,
-            "次序：关键次序" => Relation::KeyOrder,
             _ => unreachable!(),
         };
 
@@ -256,7 +255,6 @@ impl Relation {
         match *self {
             Relation::Contain => "包含关系",
             Relation::Order => "次序：次序关系",
-            Relation::KeyOrder => "次序：关键次序",
         }
     }
 
@@ -264,7 +262,7 @@ impl Relation {
     fn classification(&self) -> &'static str {
         match *self {
             Relation::Contain => "包含关系",
-            Relation::Order | Relation::KeyOrder => "次序关系",
+            Relation::Order => "次序关系",
         }
     }
 }
@@ -441,7 +439,7 @@ mod tests {
         let relations = [
             ((id_1, id_2), Relation::Contain),
             ((id_1, id_2), Relation::Order),
-            ((id_1, id_2), Relation::KeyOrder),
+            ((id_1, id_2), Relation::Order),
         ];
         let xmls = [
             "<relation><name>&#21253;&#21547;</name><headnodeid>114514</headnodeid><tailnodeid>1919810</tailnodeid><class_name>&#21253;&#21547;&#20851;&#31995;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#21253;&#21547;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>",

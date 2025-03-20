@@ -17,8 +17,8 @@ mod node;
 /// 详见：https://docs.rs/im/15.0.0/im/
 #[derive(Debug, Clone, PartialEq)]
 pub struct Snapshot {
-    nodes: HashMap<u64, EntityNode>,
-    edges: HashMap<(u64, u64), Relation>,
+    pub nodes: HashMap<u64, EntityNode>,
+    pub edges: HashMap<(u64, u64), Relation>,
     latest_id: u64,
 }
 
@@ -159,13 +159,12 @@ impl KnowledgeGraph {
 
     /// 修改节点内容
     /// 如果节点不存在，返回错误。
-    pub fn update_entity(
+    pub fn update_entity_content(
         &mut self,
         id: u64,
         content: String,
         distinct_type: DistinctEntityType,
         addon_types: &[AddonEntityType],
-        coor: (f64, f64),
     ) -> Result<(), GraphError> {
         self.before_mutation(); // 记录快照
 
@@ -174,7 +173,27 @@ impl KnowledgeGraph {
             .nodes
             .get_mut(&id)
             .map_or(Err(GraphError::EntityNotFound(id)), |node| {
-                node.update(content, distinct_type, addon_types, coor);
+                node.update(content, distinct_type, addon_types, node.coor);
+
+                Ok(())
+            })
+    }
+
+    /// 修改节点位置，delta 为位置增量。
+    /// 如果节点不存在，返回错误。
+    pub fn update_entity_position(
+        &mut self,
+        id: u64,
+        new_pos: (f64, f64),
+    ) -> Result<(), GraphError> {
+        self.before_mutation(); // 记录快照
+
+        // 修改节点位置，如果节点不存在则返回错误
+        self.current
+            .nodes
+            .get_mut(&id)
+            .map_or(Err(GraphError::EntityNotFound(id)), |node| {
+                node.coor = new_pos;
 
                 Ok(())
             })
@@ -284,9 +303,9 @@ mod tests {
 
         // 检查节点
         let node = graph.current.nodes.get(&id).unwrap();
-        assert_eq!(node.content(), content);
-        assert_eq!(node.distinct_type(), default_distinct());
-        assert_eq!(node.addon_types().len(), 4); // 重复的类型被去除
+        assert_eq!(node.content, content);
+        assert_eq!(node.distinct_type, default_distinct());
+        assert_eq!(node.addon_types.len(), 4); // 重复的类型被去除
     }
 
     #[test]
@@ -324,27 +343,25 @@ mod tests {
         // 更新节点内容
         assert!(
             graph
-                .update_entity(
+                .update_entity_content(
                     id,
                     "New Content".to_string(),
                     default_distinct(),
                     &default_addons(),
-                    default_coor(),
                 )
                 .is_ok()
         );
         // 检查节点内容
         assert_eq!(
-            graph.current.nodes.get(&id).unwrap().content(),
+            graph.current.nodes.get(&id).unwrap().content,
             "New Content".to_string()
         );
         // 更新不存在的节点应该失败
-        match graph.update_entity(
+        match graph.update_entity_content(
             999,
             "No Node".to_string(),
             default_distinct(),
             &default_addons(),
-            default_coor(),
         ) {
             Err(GraphError::EntityNotFound(eid)) => assert_eq!(eid, 999),
             _ => panic!("Expected EntityNotFound error"),
