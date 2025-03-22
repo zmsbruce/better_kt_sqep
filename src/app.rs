@@ -852,7 +852,7 @@ impl GraphApp {
     fn process_zoom(&mut self, ctx: &Context) {
         let zoom_delta = ctx.input(|i| i.zoom_delta());
         if (zoom_delta - 1.0).abs() > f32::EPSILON {
-            if let Some(mouse_pos) = ctx.input(|i| i.pointer.hover_pos()) {
+            if ctx.input(|i| i.pointer.hover_pos()).is_some() {
                 self.zoom_factor *= zoom_delta;
                 self.zoom_factor = self.zoom_factor.clamp(0.5, 3.0);
             }
