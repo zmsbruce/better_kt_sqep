@@ -35,7 +35,7 @@ impl Default for Snapshot {
 /// 教学知识图谱，支持撤回和重做操作。
 #[derive(Debug)]
 pub struct KnowledgeGraph {
-    current: Snapshot,
+    pub current: Snapshot,
     undo_stack: Vector<Snapshot>,
     redo_stack: Vector<Snapshot>,
     max_history: usize,
@@ -47,16 +47,16 @@ impl Default for KnowledgeGraph {
             current: Snapshot::default(),
             undo_stack: Vector::new(),
             redo_stack: Vector::new(),
-            max_history: 10,
+            max_history: 100,
         }
     }
 }
 
 impl KnowledgeGraph {
-    /// 创建一个新的图谱
-    pub fn new(max_history: usize) -> Self {
+    /// 从快照创建一个新的图谱
+    pub fn from_snapshot(snapshot: Snapshot) -> Self {
         Self {
-            max_history,
+            current: snapshot,
             ..Default::default()
         }
     }
@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_add_entity() {
-        let mut graph = KnowledgeGraph::new(10);
+        let mut graph = KnowledgeGraph::default();
         let content = "Test Node".to_string();
         let id = graph.add_entity(
             content.clone(),
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_remove_entity() {
-        let mut graph = KnowledgeGraph::new(10);
+        let mut graph = KnowledgeGraph::default();
         let id = graph.add_entity(
             "Node to remove".to_string(),
             default_distinct(),
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_update_entity() {
-        let mut graph = KnowledgeGraph::new(10);
+        let mut graph = KnowledgeGraph::default();
         let id = graph.add_entity(
             "Old Content".to_string(),
             default_distinct(),
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn test_edge_operations() {
-        let mut graph = KnowledgeGraph::new(10);
+        let mut graph = KnowledgeGraph::default();
         let from = graph.add_entity(
             "From Node".to_string(),
             default_distinct(),
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_undo_redo() {
-        let mut graph = KnowledgeGraph::new(10);
+        let mut graph = KnowledgeGraph::default();
         // 添加一个节点
         let id = graph.add_entity(
             "Undo Node".to_string(),
@@ -423,7 +423,7 @@ mod tests {
         assert!(graph.current.nodes.contains_key(&id));
 
         // 测试空的撤回栈
-        let mut graph2 = KnowledgeGraph::new(10);
+        let mut graph2 = KnowledgeGraph::default();
         match graph2.undo() {
             Err(GraphError::NothingToUndo) => {}
             _ => panic!("Expected NothingToUndo error"),
@@ -437,9 +437,9 @@ mod tests {
 
     #[test]
     fn test_history_limit() {
-        let mut graph = KnowledgeGraph::new(3); // Set maximum history to 3.
+        let mut graph = KnowledgeGraph::default();
         // 添加 5 个节点
-        for i in 0..5 {
+        for i in 0..150 {
             graph.add_entity(
                 format!("Node {}", i),
                 default_distinct(),
@@ -448,13 +448,13 @@ mod tests {
             );
         }
         // 撤回栈应该不超过 3
-        assert!(graph.undo_stack.len() <= 3);
+        assert!(graph.undo_stack.len() == 100);
         // 撤回尽可能多的次数，直到没有操作可撤回
         let mut undos = 0;
         while graph.undo().is_ok() {
             undos += 1;
         }
         // 撤回次数应该为 3
-        assert!(undos == 3);
+        assert!(undos == 100);
     }
 }

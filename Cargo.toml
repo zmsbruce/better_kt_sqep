@@ -1,13 +1,17 @@
 [package]
 name = "better_kt_sqep"
-version = "0.1.0"
+version = "0.1.0-beta"
 edition = "2024"
 
 [dependencies]
 eframe = "0.31.1"
+egui_extras = { version = "0.31.1", features = ["all_loaders"] }
 im = "15.1.0"
+image = { version = "0.25.5", features = ["png"] }
 quick-xml = { version = "0.37.2", features = ["serde", "serialize"] }
+rfd = "0.15.3"
 serde = { version = "1.0.219", features = ["derive"] }
+svg = "0.18.0"
 thiserror = "2.0.12"
 
 [dev-dependencies]

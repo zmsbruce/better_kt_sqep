@@ -5,6 +5,8 @@ use std::collections::HashSet;
 use im::HashMap;
 use serde::{Deserialize, Serialize};
 
+use crate::error::SerdeError;
+
 use super::{AddonEntityType, DistinctEntityType, EntityNode, Relation, Snapshot};
 
 /// 转义非 ASCII 字符
@@ -103,24 +105,27 @@ impl From<&EntityNode> for SerializableEntity {
     }
 }
 
-impl From<SerializableEntity> for EntityNode {
-    fn from(value: SerializableEntity) -> Self {
+impl TryFrom<SerializableEntity> for EntityNode {
+    type Error = SerdeError;
+    fn try_from(value: SerializableEntity) -> Result<Self, Self::Error> {
         // 根据 class_name 确定实体类型
         let distinct_type = match value.class_name.as_str() {
             "知识领域" => DistinctEntityType::KnowledgeArena,
             "知识单元" => DistinctEntityType::KnowledgeUnit,
             "知识点" => DistinctEntityType::KnowledgePoint,
             "关键知识细节" => DistinctEntityType::KnowledgeDetail,
-            _ => unreachable!(),
+            value_name => {
+                return Err(SerdeError::Unexpected("实体类型", value_name.to_string()));
+            }
         };
 
-        Self::new(
+        Ok(Self::new(
             value.id,
             value.content,
             distinct_type,
             &value.attach.iter().copied().collect::<Vec<_>>(),
             (value.x, value.y),
-        )
+        ))
     }
 }
 
@@ -238,14 +243,16 @@ impl SerializableEdge {
     }
 
     /// 将可序列化的边转换为边
-    pub fn to_edge(&self) -> (u64, u64, Relation) {
+    pub fn to_edge(&self) -> Result<(u64, u64, Relation), SerdeError> {
         let relation = match self.class_name.as_str() {
             "包含关系" => Relation::Contain,
-            "次序：次序关系" => Relation::Order,
-            _ => unreachable!(),
+            "次序关系" | "次序：次序关系" => Relation::Order,
+            _ => {
+                return Err(SerdeError::Unexpected("关系名", self.class_name.clone()));
+            }
         };
 
-        (self.headnodeid, self.tailnodeid, relation)
+        Ok((self.headnodeid, self.tailnodeid, relation))
     }
 }
 
@@ -254,7 +261,7 @@ impl Relation {
     fn class_name(&self) -> &'static str {
         match *self {
             Relation::Contain => "包含关系",
-            Relation::Order => "次序：次序关系",
+            Relation::Order => "次序关系",
         }
     }
 
@@ -270,7 +277,7 @@ impl Relation {
 /// 可序列化的快照
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "KG")]
-struct SerializableSnapshot {
+pub struct SerializableSnapshot {
     #[serde(rename = "$value")]
     title: String,
     entities: Entities,
@@ -315,15 +322,20 @@ impl From<&Snapshot> for SerializableSnapshot {
     }
 }
 
-impl From<SerializableSnapshot> for Snapshot {
-    fn from(value: SerializableSnapshot) -> Self {
+impl TryFrom<SerializableSnapshot> for Snapshot {
+    type Error = SerdeError;
+
+    fn try_from(value: SerializableSnapshot) -> Result<Self, Self::Error> {
         // 将实体节点转换为哈希表
         let nodes: HashMap<_, _> = value
             .entities
             .entities
             .into_iter()
-            .map(|entity| (entity.id, EntityNode::from(entity)))
-            .collect();
+            .map(|entity| {
+                let entity = EntityNode::try_from(entity)?;
+                Ok::<_, SerdeError>((entity.id, entity))
+            })
+            .collect::<Result<_, _>>()?;
 
         // 将边转换为哈希表
         let edges = value
@@ -331,19 +343,19 @@ impl From<SerializableSnapshot> for Snapshot {
             .items
             .into_iter()
             .map(|edge| {
-                let (from, to, relation) = edge.to_edge();
-                ((from, to), relation)
+                let (from, to, relation) = edge.to_edge()?;
+                Ok::<_, SerdeError>(((from, to), relation))
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         // 获取最大的节点 ID
         let latest_id = nodes.keys().max().copied().unwrap_or(0) + 1;
 
-        Self {
+        Ok(Self {
             nodes,
             edges,
             latest_id,
-        }
+        })
     }
 }
 
@@ -376,8 +388,9 @@ impl Snapshot {
 
     /// 从 XML 字符串解析快照
     #[inline]
-    pub fn from_xml(xml: &str) -> Result<Self, quick_xml::DeError> {
-        SerializableSnapshot::from_xml(xml).map(Snapshot::from)
+    pub fn from_xml(xml: &str) -> Result<Self, SerdeError> {
+        let s = SerializableSnapshot::from_xml(xml).map_err(SerdeError::Deserialize)?;
+        Snapshot::try_from(s)
     }
 }
 
@@ -439,12 +452,10 @@ mod tests {
         let relations = [
             ((id_1, id_2), Relation::Contain),
             ((id_1, id_2), Relation::Order),
-            ((id_1, id_2), Relation::Order),
         ];
         let xmls = [
             "<relation><name>&#21253;&#21547;</name><headnodeid>114514</headnodeid><tailnodeid>1919810</tailnodeid><class_name>&#21253;&#21547;&#20851;&#31995;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#21253;&#21547;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>",
             "<relation><name>&#21253;&#21547;</name><headnodeid>114514</headnodeid><tailnodeid>1919810</tailnodeid><class_name>&#27425;&#24207;&#65306;&#27425;&#24207;&#20851;&#31995;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#27425;&#24207;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>",
-            "<relation><name>&#21253;&#21547;</name><headnodeid>114514</headnodeid><tailnodeid>1919810</tailnodeid><class_name>&#27425;&#24207;&#65306;&#20851;&#38190;&#27425;&#24207;</class_name><mask>&#30693;&#35782;&#36830;&#32447;</mask><classification>&#27425;&#24207;&#20851;&#31995;</classification><head_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</head_need><tail_need>&#20869;&#23481;&#26041;&#27861;&#22411;&#33410;&#28857;</tail_need></relation>",
         ];
         for (((head, tail), relation), xml_gt) in relations.iter().zip(xmls.iter()) {
             let xml = to_xml(SerializableEdge::from_edge(*head, *tail, *relation)).unwrap();
@@ -453,7 +464,7 @@ mod tests {
     }
 
     fn create_knowledge_graph() -> Result<KnowledgeGraph, Box<dyn std::error::Error>> {
-        let mut knowledge_graph = KnowledgeGraph::new(0);
+        let mut knowledge_graph = KnowledgeGraph::default();
 
         let id_1 = knowledge_graph.add_entity(
             "什么是计算思维".to_string(),
