@@ -851,11 +851,10 @@ impl GraphApp {
 
     fn process_zoom(&mut self, ctx: &Context) {
         let zoom_delta = ctx.input(|i| i.zoom_delta());
-        if (zoom_delta - 1.0).abs() > f32::EPSILON {
-            if ctx.input(|i| i.pointer.hover_pos()).is_some() {
-                self.zoom_factor *= zoom_delta;
-                self.zoom_factor = self.zoom_factor.clamp(0.5, 3.0);
-            }
+        if (zoom_delta - 1.0).abs() > f32::EPSILON && ctx.input(|i| i.pointer.hover_pos()).is_some()
+        {
+            self.zoom_factor *= zoom_delta;
+            self.zoom_factor = self.zoom_factor.clamp(0.5, 3.0);
         }
     }
 
@@ -1154,7 +1153,7 @@ impl GraphApp {
             {
                 if let Some(file) = rfd::FileDialog::new()
                     .set_title("选择保存位置并输入文件名")
-                    .add_filter("XML 文件", &["xml"])
+                    .set_file_name("knowledge_graph.xml")
                     .save_file()
                 {
                     if let Some(graph) = self.graph.as_mut() {
