@@ -4,7 +4,7 @@ version = "0.1.0-beta"
 edition = "2024"
 
 [dependencies]
-eframe = "0.31.1"
+eframe = { version = "0.31.1", features = [ "wgpu" ] }
 egui_extras = { version = "0.31.1", features = ["all_loaders"] }
 im = "15.1.0"
 image = { version = "0.25.5", features = ["png"] }
