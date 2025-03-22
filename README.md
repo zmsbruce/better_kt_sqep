@@ -4,15 +4,33 @@
 
 ![展示](assets/image.png)
 
+### 如果对您有所帮助，希望点一个免费的 star⭐，谢谢喵！
 
 ## 特点
 
-- **不闪退**（尽量）
-- 自动保存
+- **不闪退，不闪退，不闪退**
+- 支持自动保存
 - 支持撤销与恢复
 - 支持快捷键
-- 更人性化的操作方式
-- 无环境依赖
+- 操作方式更人性化
+- 性能更高
+- 单个程序即可运行
+
+## 下载
+
+[点击前往下载](https://github.com/zmsbruce/better_kt_sqep/releases)
+
+## 编译安装
+
+如果下载网页中没有您需要的版本，您可以克隆本项目然后编译安装。
+
+首先需要安装 [Rust](https://www.rust-lang.org/zh-CN/tools/install)。安装完毕之后，在项目所在目录输入：
+
+```bash
+cargo build --release
+```
+
+目标文件为 /target/release/better_kt_sqep
 
 ## 操作方式
 
