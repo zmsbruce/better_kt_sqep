@@ -1,10 +1,18 @@
 # Better KT-SQEP
 
-一个 **兼容 KT-SQEP**，但更稳定、更人性化、更快的知识图谱绘制工具。
+一个 **兼容 KT-SQEP**，但更**稳定、更人性化、更快的**知识图谱绘制工具。
+
+> 注：KT-SQEP 是一个知识图谱工具，用于战德臣老师所授课程的知识图谱绘制要求。
 
 ![展示](assets/image.png)
 
-### 如果对您有所帮助，希望点一个免费的 star⭐，谢谢喵！
+### 如果对您有所帮助，希望点一个免费的 star⭐，谢谢！
+
+## 有关课程
+
+- CS64006	高级数据库系统
+- CS65003	企业资源规划与供应链管理系统
+- *...... 欢迎进行补充*
 
 ## 特点
 
@@ -20,17 +28,17 @@
 
 [点击前往下载](https://github.com/zmsbruce/better_kt_sqep/releases)
 
-## 编译安装
+## 编译
 
 如果下载网页中没有您需要的版本，您可以克隆本项目然后编译安装。
 
-首先需要安装 [Rust](https://www.rust-lang.org/zh-CN/tools/install)。安装完毕之后，在项目所在目录输入：
+首先需要安装 [Rust](https://www.rust-lang.org/zh-CN/tools/install) 。安装完毕之后，在项目所在目录输入：
 
 ```bash
 cargo build --release
 ```
 
-目标文件为 /target/release/better_kt_sqep
+即编译完成。目标文件为 /target/release/better_kt_sqep
 
 ## 操作方式
 
