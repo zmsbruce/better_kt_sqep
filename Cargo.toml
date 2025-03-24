@@ -3,6 +3,10 @@ name = "better_kt_sqep"
 version = "0.1.0-beta"
 edition = "2024"
 
+[lib]
+name = "py_better_kt_sqep"
+crate-type = ["cdylib"]
+
 [dependencies]
 eframe = { version = "0.31.1", features = [ "wgpu" ] }
 egui_extras = { version = "0.31.1", features = ["all_loaders"] }
@@ -13,6 +17,7 @@ rfd = "0.15.3"
 serde = { version = "1.0.219", features = ["derive"] }
 svg = "0.18.0"
 thiserror = "2.0.12"
+pyo3 = { version = "0.24.0", features = ["extension-module"] }
 
 [dev-dependencies]
 regex = "1.11.1"
