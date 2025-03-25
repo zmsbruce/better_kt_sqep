@@ -30,87 +30,9 @@
 
 [点击前往下载](https://github.com/zmsbruce/better_kt_sqep/releases)
 
-## 操作方式
+## 使用方式
 
-见 [Usage.mp4](./Usage.mp4)
-
-## 使用 Python 绑定
-
-克隆本项目后，在控制台输入：
-
-```sh
-# 创建一个虚拟环境
-python -m venv .venv
-
-# 激活虚拟环境（Linux）
-source .venv/bin/activate
-
-# 或者激活虚拟环境（Windows）
-.venv\Scripts\activate
-
-pip install maturin
-maturin develop
-```
-
-之后您可以使用 Python 绑定，使用方法如下：
-
-```python
-from py_better_kt_sqep import KnowledgeGraph
-
-# 初始化一个知识图谱
-kg = KnowledgeGraph()
-
-# 添加节点
-#
-# 参数：
-# - content：节点内容
-# - distinct_type：独立实体类型，分别是 ka (知识领域)、ku (知识单元)、kp (知识点)、kd (知识细节)
-# - addon_types：附加实体类型，为 k (知识)、t (思维)、e (示例)、q (问题)、p (练习)、z (思政) 的组合
-# - x：横坐标
-# - y：纵坐标
-#
-# 返回：节点 id
-entity_1 = kg.add_entity("这里是节点一", "ka", "kte", 0.0, 100.0)
-entity_2 = kg.add_entity("这里是节点二", "ka", "kte", 100.0, 100.0)
-
-# 添加边
-#
-# 参数：
-# - from：边开始的节点 id
-# - to：边指向的节点 id
-# - relation：关系，为 contain (包含) 或者 order 次序
-kg.add_edge(entity_1, entity_2, "contain")
-
-# 删除边
-#
-# 参数：
-# - from：边开始的节点 id
-# - to：边指向的节点 id
-kg.remove_edge(entity_1, entity_2)
-
-# 删除节点
-#
-# 参数：
-# - id：节点 id
-kg.remove_entity(entity_2)
-
-# 导出为 XML
-#
-# 返回：XML 字符串
-xml = kg.to_xml()
-```
-
-## 编译
-
-如果下载网页中没有您需要的版本，您可以克隆本项目然后编译安装。
-
-首先需要安装 [Rust](https://www.rust-lang.org/zh-CN/tools/install) 。安装完毕之后，在项目所在目录输入：
-
-```bash
-cargo build --release
-```
-
-即编译完成。目标文件为 /target/release/better_kt_sqep
+见 [USEGE.md](./USAGE.md)
 
 ## 兼容情况
 
