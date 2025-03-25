@@ -137,6 +137,7 @@ impl App for GraphApp {
                         content_rect = content_rect.union(node_rect);
                     }
                 }
+                content_rect = content_rect.expand(200.0); // 扩大一些边界，避免节点贴边
                 ui.expand_to_include_rect(content_rect); // 告诉UI内容区域大小
 
                 // 原有绘制和处理逻辑
