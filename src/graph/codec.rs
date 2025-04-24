@@ -294,7 +294,7 @@ struct Entities {
 /// 关系包装器
 #[derive(Debug, Serialize, Deserialize)]
 struct Relations {
-    #[serde(rename = "relation")]
+    #[serde(rename = "relation", default)]
     pub items: Vec<SerializableEdge>,
 }
 
