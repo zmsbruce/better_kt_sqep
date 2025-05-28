@@ -5,6 +5,9 @@
 
 ## 使用软件
 
+新建文件：
+![](./assets/new_file.gif)
+
 打开文件：
 
 ![](./assets/open_file.gif)
