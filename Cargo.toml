@@ -2,6 +2,9 @@
 name = "better_kt_sqep"
 version = "0.2.1"
 edition = "2024"
+authors = ["zmsbruce <zmsbruce@163.com>"]
+description = "A better knowledge graph editing software replacing KT-SQEP."
+license = "GPL-3.0"
 
 [lib]
 name = "py_better_kt_sqep"
