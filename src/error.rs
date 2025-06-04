@@ -18,6 +18,8 @@ pub enum SerdeError {
     Serialize(#[from] quick_xml::SeError),
     #[error("failed to deserialize from xml")]
     Deserialize(#[from] quick_xml::DeError),
+    #[error("failed to add ident")]
+    Ident(#[from] quick_xml::Error),
     #[error("failed to parse utf8 string")]
     Utf8(#[from] std::str::Utf8Error),
     #[error("unexpected {0}: {1}")]

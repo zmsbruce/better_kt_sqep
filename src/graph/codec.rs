@@ -1,8 +1,9 @@
 //! 知识图谱编解码 XML 格式的定义与实现
 
-use std::collections::HashSet;
+use std::{collections::HashSet, io::Cursor};
 
 use im::HashMap;
+use quick_xml::{Reader, Writer, events::Event};
 use serde::{Deserialize, Serialize};
 
 use crate::error::SerdeError;
@@ -359,14 +360,37 @@ impl TryFrom<SerializableSnapshot> for Snapshot {
     }
 }
 
+fn indent_xml(xml_string: &str) -> Result<String, quick_xml::Error> {
+    let mut reader = Reader::from_str(xml_string);
+
+    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Eof) => break,
+            Ok(event) => {
+                writer.write_event(event)?;
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(String::from_utf8(writer.into_inner().into_inner()).unwrap())
+}
+
 impl SerializableSnapshot {
     /// 将快照转换为 XML 格式
-    pub fn to_xml(&self) -> Result<String, quick_xml::SeError> {
+    pub fn to_xml(&self) -> Result<String, SerdeError> {
         // 序列化为 XML 字符串
         let content = quick_xml::se::to_string(self)?;
 
+        // 添加缩进
+        let indented_content = indent_xml(&content)?;
+
         // 转义非 ASCII 字符
-        Ok(escape_non_ascii(&content))
+        Ok(escape_non_ascii(&indented_content))
     }
 
     /// 从 XML 字符串解析快照
@@ -382,7 +406,7 @@ impl SerializableSnapshot {
 impl Snapshot {
     /// 将快照转换为 XML 格式
     #[inline]
-    pub fn to_xml(&self) -> Result<String, quick_xml::SeError> {
+    pub fn to_xml(&self) -> Result<String, SerdeError> {
         SerializableSnapshot::from(self).to_xml()
     }
 

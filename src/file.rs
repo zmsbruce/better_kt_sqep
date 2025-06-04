@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    error::{Error, GraphError, SerdeError},
+    error::{Error, GraphError},
     graph::{AddonEntityType, DistinctEntityType, KnowledgeGraph, Relation, Snapshot},
 };
 
@@ -89,7 +89,7 @@ impl FiledKnowledgeGraph {
     }
 
     pub fn save(&self) -> Result<(), Error> {
-        let xml = self.graph.current.to_xml().map_err(SerdeError::Serialize)?;
+        let xml = self.graph.current.to_xml()?;
         let _lock = match FILE_WRITE_LOCK.lock() {
             Ok(lock) => lock,
             Err(e) => return Err(Error::Poison(e.to_string())),
