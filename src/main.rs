@@ -52,7 +52,7 @@ fn main() {
 
 fn load_icon() -> IconData {
     let (icon_rgba, icon_width, icon_height) = {
-        let icon = include_bytes!("../assets/zdc.png");
+        let icon = include_bytes!("../assets/xml.png");
         let image = image::load_from_memory(icon)
             .expect("Failed to open icon path")
             .into_rgba8();
