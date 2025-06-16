@@ -288,7 +288,7 @@ pub struct SerializableSnapshot {
 /// 实体包装器
 #[derive(Debug, Serialize, Deserialize)]
 struct Entities {
-    #[serde(rename = "entity")]
+    #[serde(rename = "entity", default)]
     entities: Vec<SerializableEntity>,
 }
 
