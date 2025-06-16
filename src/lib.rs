@@ -1,4 +1,4 @@
-use graph::{AddonEntityType, DistinctEntityType};
+#[cfg(feature = "extension-module")]
 use pyo3::{exceptions::PyException, prelude::*};
 
 mod app;
@@ -6,19 +6,19 @@ mod error;
 mod file;
 mod graph;
 
-use crate::graph::KnowledgeGraph;
-
+#[cfg(feature = "extension-module")]
 #[pyclass(name = "KnowledgeGraph")]
 pub struct PyKnowledgeGraph {
-    graph: KnowledgeGraph,
+    graph: graph::KnowledgeGraph,
 }
 
+#[cfg(feature = "extension-module")]
 #[pymethods]
 impl PyKnowledgeGraph {
     #[new]
     fn new() -> Self {
         Self {
-            graph: KnowledgeGraph::default(),
+            graph: graph::KnowledgeGraph::default(),
         }
     }
 
@@ -39,10 +39,10 @@ impl PyKnowledgeGraph {
     ) -> PyResult<u64> {
         // 将 distinct_type 转为 enum
         let distinct_type = match distinct_type.to_lowercase().as_str() {
-            "ka" => DistinctEntityType::KnowledgeArena,
-            "ku" => DistinctEntityType::KnowledgeUnit,
-            "kp" => DistinctEntityType::KnowledgePoint,
-            "kd" => DistinctEntityType::KnowledgeDetail,
+            "ka" => graph::DistinctEntityType::KnowledgeArena,
+            "ku" => graph::DistinctEntityType::KnowledgeUnit,
+            "kp" => graph::DistinctEntityType::KnowledgePoint,
+            "kd" => graph::DistinctEntityType::KnowledgeDetail,
             _ => {
                 return Err(PyErr::new::<PyException, _>(format!(
                     "Invalid distinct type {distinct_type}"
@@ -55,12 +55,12 @@ impl PyKnowledgeGraph {
             .to_lowercase()
             .chars()
             .map(|c| match c {
-                'k' => Ok(AddonEntityType::Knowledge),
-                't' => Ok(AddonEntityType::Thinking),
-                'e' => Ok(AddonEntityType::Example),
-                'q' => Ok(AddonEntityType::Question),
-                'p' => Ok(AddonEntityType::Practice),
-                'z' => Ok(AddonEntityType::Political),
+                'k' => Ok(graph::AddonEntityType::Knowledge),
+                't' => Ok(graph::AddonEntityType::Thinking),
+                'e' => Ok(graph::AddonEntityType::Example),
+                'q' => Ok(graph::AddonEntityType::Question),
+                'p' => Ok(graph::AddonEntityType::Practice),
+                'z' => Ok(graph::AddonEntityType::Political),
                 _ => Err(PyErr::new::<PyException, _>(format!(
                     "Invalid addon type {c}"
                 ))),
@@ -109,6 +109,7 @@ impl PyKnowledgeGraph {
     }
 }
 
+#[cfg(feature = "extension-module")]
 #[pymodule]
 pub fn py_better_kt_sqep(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKnowledgeGraph>()?;
