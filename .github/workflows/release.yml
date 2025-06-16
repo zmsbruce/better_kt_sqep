@@ -55,7 +55,7 @@ jobs:
           elif [[ "${{ matrix.os }}" == "Linux" ]]; then
             cargo deb --target ${{ matrix.target }}
             DEB_FILE=$(find target/debian -name "*.deb")
-            mv "$DEB_FILE" "$ARTIFACT_DIR/better_kt_sqep_${{ steps.info.outputs.version }}_amd64.deb"
+            mv "$DEB_FILE" "$ARTIFACT_DIR/better_kt_sqep_${{ steps.info.outputs.version }}_${{ matrix.name }}.deb"
           else
             cargo build --release --target ${{ matrix.target }}
             mv "target/${{ matrix.target }}/release/better_kt_sqep" "$ARTIFACT_DIR/better_kt_sqep-${{ steps.info.outputs.version }}-${{ matrix.name }}"
