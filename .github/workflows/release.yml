@@ -17,8 +17,8 @@ jobs:
             target: x86_64-apple-darwin
             name: macos-x86_64
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            name: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            name: debian-x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: windows-x86_64
@@ -30,11 +30,15 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y libarchive-tools
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: Install cargo-deb (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cargo install cargo-deb
       - name: Get project info
         id: info
         run: |
@@ -45,14 +49,17 @@ jobs:
         run: |
           ARTIFACT_DIR="dist"
           mkdir -p $ARTIFACT_DIR
-          cargo build --release --target ${{ matrix.target }}
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cargo build --release --target ${{ matrix.target }}
             mv "target/${{ matrix.target }}/release/${{ steps.info.outputs.project_name }}.exe" "$ARTIFACT_DIR/${{ steps.info.outputs.project_name }}-${{ steps.info.outputs.version }}-${{ matrix.name }}.exe"
+          elif [[ "${{ matrix.os }}" == "Linux" ]]; then
+            cargo deb --target ${{ matrix.target }}
+            DEB_FILE=$(find target/debian -name "*.deb")
+            mv "$DEB_FILE" "$ARTIFACT_DIR/${{ steps.info.outputs.project_name }}_${{ steps.info.outputs.version }}_amd64.deb"
           else
-            BINARY_NAME="${{ steps.info.outputs.project_name }}"
-            ARCHIVE_NAME="${{ steps.info.outputs.project_name }}-${{ steps.info.outputs.version }}-${{ matrix.name }}.tar.gz"
-            tar -czvf "$ARTIFACT_DIR/$ARCHIVE_NAME" -C "target/${{ matrix.target }}/release" "$BINARY_NAME"
-          fi
+            cargo build --release --target ${{ matrix.target }}
+            mv "target/${{ matrix.target }}/release/${{ steps.info.outputs.project_name }}" "$ARTIFACT_DIR/${{ steps.info.outputs.project_name }}-${{ steps.info.outputs.version }}-${{ matrix.name }}"
+            fi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
