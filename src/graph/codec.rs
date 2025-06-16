@@ -24,33 +24,6 @@ fn escape_non_ascii(input: &str) -> String {
         .collect()
 }
 
-/// 将转义后的非 ASCII 字符还原
-fn unescape_non_ascii(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-
-    let mut chars = input.chars();
-    while let Some(c) = chars.next() {
-        if c == '&' {
-            if let Some('#') = chars.next() {
-                let mut char_code = 0;
-                for digit in chars.by_ref() {
-                    if digit == ';' {
-                        break;
-                    }
-                    char_code = char_code * 10 + digit.to_digit(10).unwrap();
-                }
-                result.push(char::from_u32(char_code).unwrap());
-            } else {
-                result.push(c);
-            }
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
-}
-
 /// 可序列化的实体节点
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "entity")]
@@ -395,11 +368,8 @@ impl SerializableSnapshot {
 
     /// 从 XML 字符串解析快照
     pub fn from_xml(xml: &str) -> Result<Self, quick_xml::DeError> {
-        // 还原非 ASCII 字符
-        let xml = unescape_non_ascii(xml);
-
         // 解析 XML 字符串
-        quick_xml::de::from_str(&xml)
+        quick_xml::de::from_str(xml)
     }
 }
 
@@ -536,7 +506,10 @@ mod tests {
     #[test]
     fn test_encode_snapshot() -> Result<(), Box<dyn std::error::Error>> {
         let knowledge_graph = create_knowledge_graph()?;
-        let xml = knowledge_graph.current_snapshot().to_xml()?;
+        let xml = knowledge_graph
+            .current_snapshot()
+            .to_xml()?
+            .replace(['\n', ' '], "");
 
         // 检查 XML 结构是否正确
         let pattern = r"^<KG>&#25945;&#23398;&#30693;&#35782;&#22270;&#35889;<entities>(?:<entity>.*?</entity>)+</entities><relations>(?:<relation>.*?</relation>)+</relations></KG>$";
