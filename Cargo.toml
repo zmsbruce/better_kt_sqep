@@ -20,7 +20,7 @@ rfd = "0.15.3"
 serde = { version = "1.0.219", features = ["derive"] }
 svg = "0.18.0"
 thiserror = "2.0.12"
-pyo3 = { version = "0.24.0", features = ["extension-module", "abi3-py37"] }
+pyo3 = { version = "0.24.0", features = ["extension-module", "abi3-py39"] }
 
 [dev-dependencies]
 regex = "1.11.1"
