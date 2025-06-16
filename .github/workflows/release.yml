@@ -51,14 +51,14 @@ jobs:
           mkdir -p $ARTIFACT_DIR
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             cargo build --release --target ${{ matrix.target }}
-            mv "target/${{ matrix.target }}/release/${{ steps.info.outputs.project_name }}.exe" "$ARTIFACT_DIR/${{ steps.info.outputs.project_name }}-${{ steps.info.outputs.version }}-${{ matrix.name }}.exe"
+            mv "target/${{ matrix.target }}/release/better_kt_sqep.exe" "$ARTIFACT_DIR/better_kt_sqep-${{ steps.info.outputs.version }}-${{ matrix.name }}.exe"
           elif [[ "${{ matrix.os }}" == "Linux" ]]; then
             cargo deb --target ${{ matrix.target }}
             DEB_FILE=$(find target/debian -name "*.deb")
-            mv "$DEB_FILE" "$ARTIFACT_DIR/${{ steps.info.outputs.project_name }}_${{ steps.info.outputs.version }}_amd64.deb"
+            mv "$DEB_FILE" "$ARTIFACT_DIR/better_kt_sqep_${{ steps.info.outputs.version }}_amd64.deb"
           else
             cargo build --release --target ${{ matrix.target }}
-            mv "target/${{ matrix.target }}/release/${{ steps.info.outputs.project_name }}" "$ARTIFACT_DIR/${{ steps.info.outputs.project_name }}-${{ steps.info.outputs.version }}-${{ matrix.name }}"
+            mv "target/${{ matrix.target }}/release/better_kt_sqep" "$ARTIFACT_DIR/better_kt_sqep-${{ steps.info.outputs.version }}-${{ matrix.name }}"
             fi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
