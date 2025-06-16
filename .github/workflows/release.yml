@@ -51,11 +51,11 @@ jobs:
           mkdir -p $ARTIFACT_DIR
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             cargo build --release --target ${{ matrix.target }}
-            mv "target/${{ matrix.target }}/release/better_kt_sqep.exe" "$ARTIFACT_DIR/better_kt_sqep-${{ steps.info.outputs.version }}-${{ matrix.name }}.exe"
+            mv "target/${{ matrix.target }}/release/better_kt_sqep_${{ steps.info.outputs.version }}_${{ matrix.name }}.exe" "$ARTIFACT_DIR/better_kt_sqep-${{ steps.info.outputs.version }}-${{ matrix.name }}.exe"
           elif [[ "${{ matrix.os }}" == "Linux" ]]; then
             cargo deb --target ${{ matrix.target }}
             DEB_FILE=$(find target/debian -name "*.deb")
-            mv "$DEB_FILE" "$ARTIFACT_DIR/better_kt_sqep_${{ steps.info.outputs.version }}_${{ matrix.name }}.deb"
+            mv $DEB_FILE "$ARTIFACT_DIR/better_kt_sqep_${{ steps.info.outputs.version }}_${{ matrix.name }}.deb"
           else
             cargo build --release --target ${{ matrix.target }}
             mv "target/${{ matrix.target }}/release/better_kt_sqep" "$ARTIFACT_DIR/better_kt_sqep-${{ steps.info.outputs.version }}-${{ matrix.name }}"
@@ -78,6 +78,7 @@ jobs:
         with:
           command: build
           args: --release --out dist
+          target: ${{ matrix.os == 'macos-latest' && 'universal2-apple-darwin' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
@@ -95,5 +96,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: artifacts/*/*
