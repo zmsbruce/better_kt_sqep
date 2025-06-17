@@ -900,10 +900,10 @@ impl GraphApp {
                         copy_pos,
                     );
                     
-                    // 建立从原节点到新节点的关系（默认使用包含关系）
+                    // 建立从原节点到新节点的关系（默认使用顺序关系）
                     dialog_error!(
                         self,
-                        self.graph.as_mut().unwrap().add_edge(original_id, new_id, Relation::Contain),
+                        self.graph.as_mut().unwrap().add_edge(original_id, new_id, Relation::Order),
                         &[],
                         "创建节点关系失败"
                     );
