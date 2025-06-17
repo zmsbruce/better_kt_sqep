@@ -182,6 +182,9 @@ impl App for GraphApp {
             // 若鼠标左键抬起，则停止拖动节点
             self.process_primary_up(ui);
 
+            // 检测中键点击创建副本
+            self.process_middle_click(ui);
+
             // 检测删除
             self.process_keyboard_delete(ui);
 
@@ -852,6 +855,69 @@ impl GraphApp {
                             self.edge_start_node = None;
                         }
                     }
+                }
+            }
+        }
+    }
+
+    fn process_middle_click(&mut self, ui: &egui::Ui) {
+        if self.graph.is_none() {
+            return;
+        }
+        
+        // 检测中键点击事件
+        if ui.input(|i| i.pointer.button_released(egui::PointerButton::Middle)) && !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
+            if let Some(click_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                // 先收集需要的信息，避免借用冲突
+                let mut node_to_copy: Option<(u64, String, DistinctEntityType, Vec<AddonEntityType>, (f64, f64))> = None;
+                
+                {
+                    // 检查点击位置是否在节点区域
+                    let snapshot = self.graph.as_ref().unwrap().current_snapshot();
+                    for (id, node) in snapshot.nodes.iter() {
+                        let node_pos = self.node_screen_pos(node);
+                        let size = Vec2::new(NODE_SIZE.x, NODE_SIZE.y) * self.zoom_factor;
+                        let rect = Rect::from_center_size(node_pos, size);
+                        if rect.contains(click_pos) {
+                            // 在右侧创建副本
+                            let original_content_pos = Pos2::new(node.coor.0 as f32, node.coor.1 as f32);
+                            let copy_offset = Vec2::new(200.0, 0.0); // 在右侧200像素处创建副本
+                            let copy_pos = original_content_pos + copy_offset;
+                            
+                            let addon_vec: Vec<AddonEntityType> = node.addon_types.iter().cloned().collect();
+                            node_to_copy = Some((
+                                *id,
+                                node.content.clone(),
+                                node.distinct_type,
+                                addon_vec,
+                                (copy_pos.x as f64, copy_pos.y as f64),
+                            ));
+                            break;
+                        }
+                    }
+                }
+                
+                // 如果找到了要复制的节点，执行复制操作
+                if let Some((original_id, content, distinct_type, addon_vec, copy_pos)) = node_to_copy {
+                    // 创建节点副本
+                    let new_id = self.graph.as_mut().unwrap().add_entity(
+                        content,
+                        distinct_type,
+                        &addon_vec,
+                        copy_pos,
+                    );
+                    
+                    // 建立从原节点到新节点的关系（默认使用包含关系）
+                    dialog_error!(
+                        self,
+                        self.graph.as_mut().unwrap().add_edge(original_id, new_id, Relation::Contain),
+                        &[],
+                        "创建节点关系失败"
+                    );
+                    
+                    // 选中新创建的节点
+                    self.selected_node = Some(new_id);
+                    self.info = ("已创建节点副本".to_string(), time::Instant::now());
                 }
             }
         }
