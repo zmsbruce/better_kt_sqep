@@ -1,8 +1,8 @@
 [package]
 name = "better_kt_sqep"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2024"
-authors = ["zmsbruce <zmsbruce@163.com>"]
+authors = ["zmsbruce <zmsbruce@163.com>", "happyme531 <happyme5315@gmail.com>"]
 description = "A better knowledge graph editing software replacing KT-SQEP."
 license = "GPL-3.0"
 

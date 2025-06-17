@@ -62,6 +62,10 @@ pub struct GraphApp {
 
     // 剪贴板 - 存储复制的节点信息
     clipboard_node: Option<(String, DistinctEntityType, HashSet<AddonEntityType>, Vec<(u64, Relation)>, Vec<(u64, Relation)>)>,
+
+    // 中键拖动画布相关
+    middle_dragging: bool,
+    middle_drag_start_pos: Pos2,
 }
 
 impl Default for GraphApp {
@@ -94,6 +98,8 @@ impl Default for GraphApp {
             scroll_offset: Vec2::ZERO,
             zoom_factor: 1.0,
             clipboard_node: None,
+            middle_dragging: false,
+            middle_drag_start_pos: Pos2::ZERO,
         }
     }
 }
@@ -126,49 +132,28 @@ impl App for GraphApp {
                 return;
             }
 
-            let scroll_area = egui::ScrollArea::both()
-                .auto_shrink([false, false])
-                .drag_to_scroll(false); // 禁用拖动滚动，避免与拖动节点冲突
+            // 直接在CentralPanel中处理，不使用ScrollArea
+            let painter = ui.painter();
 
-            let scroll_response = scroll_area.show(ui, |ui| {
-                // 计算内容边界以正确显示滚动条
-                let mut content_rect = Rect::NOTHING;
-                if let Some(graph) = self.graph.as_ref() {
-                    let snapshot = graph.current_snapshot();
-                    for node in snapshot.nodes.values() {
-                        let pos = self.node_screen_pos(node);
-                        let node_rect = Rect::from_center_size(pos, NODE_SIZE * self.zoom_factor);
-                        content_rect = content_rect.union(node_rect);
-                    }
-                }
-                content_rect = content_rect.expand(200.0); // 扩大一些边界，避免节点贴边
-                ui.expand_to_include_rect(content_rect); // 告诉UI内容区域大小
+            self.draw_edges_and_nodes(painter);
 
-                // 原有绘制和处理逻辑
-                let painter = ui.painter();
+            // 如果选中了节点，则突出显示
+            self.show_selected_node(painter);
 
-                self.draw_edges_and_nodes(painter);
+            // 如果选中了边，则突出显示
+            self.show_selected_edge(painter);
 
-                // 如果选中了节点，则突出显示
-                self.show_selected_node(painter);
+            // 如果正在拖动节点，则进行绘制
+            self.show_dragging_node(painter);
 
-                // 如果选中了边，则突出显示
-                self.show_selected_edge(painter);
+            // 如果鼠标悬停在节点或边上，则进行绘制
+            self.show_hovered_node(painter);
 
-                // 如果正在拖动节点，则进行绘制
-                self.show_dragging_node(painter);
+            // 如果鼠标悬停在边上，则进行绘制
+            self.show_hovered_edge(painter);
 
-                // 如果鼠标悬停在节点或边上，则进行绘制
-                self.show_hovered_node(painter);
-
-                // 如果鼠标悬停在边上，则进行绘制
-                self.show_hovered_edge(painter);
-
-                // 如果正在绘制边，则进行绘制
-                self.show_drawing_edge(ui, painter, ctx);
-            });
-
-            self.scroll_offset = scroll_response.state.offset;
+            // 如果正在绘制边，则进行绘制
+            self.show_drawing_edge(ui, painter, ctx);
 
             // 处理鼠标悬停事件
             self.process_hover(ui);
@@ -184,6 +169,9 @@ impl App for GraphApp {
 
             // 检测中键点击创建副本
             self.process_middle_click(ui);
+
+            // 检测中键拖动画布
+            self.process_middle_drag(ui);
 
             // 检测删除
             self.process_keyboard_delete(ui);
@@ -226,14 +214,19 @@ impl GraphApp {
     }
 
     #[inline]
+    fn is_middle_dragging(&self) -> bool {
+        self.middle_dragging
+    }
+
+    #[inline]
     fn node_screen_pos(&self, node: &EntityNode) -> Pos2 {
         let content_pos = Pos2::new(node.coor.0 as f32, node.coor.1 as f32);
-        (content_pos * self.zoom_factor) - self.scroll_offset + Vec2::new(0.0, TOP_PANEL_HEIGHT)
+        (content_pos * self.zoom_factor) + self.scroll_offset + Vec2::new(0.0, TOP_PANEL_HEIGHT)
     }
 
     #[inline]
     fn screen_to_content(&self, screen_pos: Pos2) -> Pos2 {
-        (screen_pos - Vec2::new(0.0, TOP_PANEL_HEIGHT) + self.scroll_offset) / self.zoom_factor
+        (screen_pos - Vec2::new(0.0, TOP_PANEL_HEIGHT) - self.scroll_offset) / self.zoom_factor
     }
 
     fn draw_edges_and_nodes(&self, painter: &Painter) {
@@ -865,8 +858,8 @@ impl GraphApp {
             return;
         }
         
-        // 检测中键点击事件
-        if ui.input(|i| i.pointer.button_released(egui::PointerButton::Middle)) && !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
+        // 检测中键点击事件（只有在没有拖动画布的情况下才创建副本）
+        if ui.input(|i| i.pointer.button_released(egui::PointerButton::Middle)) && !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() && !self.middle_dragging {
             if let Some(click_pos) = ui.input(|i| i.pointer.interact_pos()) {
                 // 先收集需要的信息，避免借用冲突
                 let mut node_to_copy: Option<(u64, String, DistinctEntityType, Vec<AddonEntityType>, (f64, f64))> = None;
@@ -920,6 +913,38 @@ impl GraphApp {
                     self.info = ("已创建节点副本".to_string(), time::Instant::now());
                 }
             }
+        }
+    }
+
+    fn process_middle_drag(&mut self, ui: &egui::Ui) {
+        if self.graph.is_none() {
+            return;
+        }
+
+        // 检测中键按下开始准备拖动
+        if ui.input(|i| i.pointer.button_pressed(egui::PointerButton::Middle)) && !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                self.middle_drag_start_pos = pos;
+                // 注意：这里不立即设置middle_dragging为true，而是等到实际拖动时再设置
+            }
+        }
+
+        // 处理中键拖动过程
+        if ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle)) && !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
+            if let Some(current_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let drag_delta = current_pos - self.middle_drag_start_pos;
+                // 只有当拖动距离超过阈值时才认为是拖动操作
+                if drag_delta.length() > 5.0 || self.middle_dragging {
+                    self.middle_dragging = true;
+                    self.scroll_offset += drag_delta; // 拖动方向和画布移动方向相同
+                    self.middle_drag_start_pos = current_pos;
+                }
+            }
+        }
+
+        // 检测中键释放停止拖动
+        if ui.input(|i| i.pointer.button_released(egui::PointerButton::Middle)) {
+            self.middle_dragging = false;
         }
     }
 
