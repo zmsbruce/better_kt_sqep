@@ -60,8 +60,8 @@ pub struct GraphApp {
     // 用于记录缩放比例和缩放中心
     zoom_factor: f32,
 
-    // 剪贴板 - 存储复制的节点信息
-    clipboard_node: Option<(String, DistinctEntityType, HashSet<AddonEntityType>, Vec<(u64, Relation)>, Vec<(u64, Relation)>)>,
+    // 剪贴板 - 存储复制的节点信息 (内容, 类型, 附加类型, 位置, 入边, 出边)
+    clipboard_node: Option<(String, DistinctEntityType, HashSet<AddonEntityType>, (f64, f64), Vec<(u64, Relation)>, Vec<(u64, Relation)>)>,
 
     // 中键拖动画布相关
     middle_dragging: bool,
@@ -990,6 +990,7 @@ impl GraphApp {
                                         node.content.clone(),
                                         node.distinct_type,
                                         node.addon_types.iter().cloned().collect(),
+                                        node.coor, // 保存原始位置
                                         incoming_edges,
                                         outgoing_edges,
                                     ));
@@ -1002,16 +1003,16 @@ impl GraphApp {
                         // 对于系统粘贴事件，我们不处理文本内容，因为我们有自己的复制粘贴逻辑
                         // 只有在有剪贴板内容时才处理
                         if !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
-                            if let Some((content, distinct_type, addon_types, incoming_edges, outgoing_edges)) = &self.clipboard_node {
+                            if let Some((content, distinct_type, addon_types, original_pos, incoming_edges, outgoing_edges)) = &self.clipboard_node {
                                 if let Some(graph) = self.graph.as_mut() {
-                                    // 使用固定位置粘贴
-                                    let paste_pos = Pos2::new(100.0, 100.0);
+                                    // 在源节点附近粘贴（向右下偏移50像素）
+                                    let paste_pos = (original_pos.0 + 50.0, original_pos.1 + 50.0);
                                     let addon_vec: Vec<AddonEntityType> = addon_types.iter().cloned().collect();
                                     let new_id = graph.add_entity(
                                         content.clone(),
                                         *distinct_type,
                                         &addon_vec,
-                                        (paste_pos.x as f64, paste_pos.y as f64),
+                                        paste_pos,
                                     );
 
                                     // 重新建立边关系
@@ -1495,6 +1496,7 @@ impl GraphApp {
                                 node.content.clone(),
                                 node.distinct_type,
                                 node.addon_types.iter().cloned().collect(),
+                                node.coor, // 保存原始位置
                                 incoming_edges,
                                 outgoing_edges,
                             ));
@@ -1515,16 +1517,16 @@ impl GraphApp {
                 .on_hover_text("粘贴节点 (Ctrl+V)")
                 .clicked() && self.clipboard_node.is_some()
             {
-                if let Some((content, distinct_type, addon_types, incoming_edges, outgoing_edges)) = &self.clipboard_node {
+                if let Some((content, distinct_type, addon_types, original_pos, incoming_edges, outgoing_edges)) = &self.clipboard_node {
                     if let Some(graph) = self.graph.as_mut() {
-                        // 使用固定位置粘贴
-                        let paste_pos = Pos2::new(100.0, 100.0);
+                        // 在源节点附近粘贴（向右下偏移50像素）
+                        let paste_pos = (original_pos.0 + 50.0, original_pos.1 + 50.0);
                         let addon_vec: Vec<AddonEntityType> = addon_types.iter().cloned().collect();
                         let new_id = graph.add_entity(
                             content.clone(),
                             *distinct_type,
                             &addon_vec,
-                            (paste_pos.x as f64, paste_pos.y as f64),
+                            paste_pos,
                         );
 
                         // 重新建立边关系
