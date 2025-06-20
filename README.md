@@ -38,7 +38,7 @@
 - 操作软件
 - 使用 Python 绑定的 API
 
-其中使用 Python 绑定的方式可以**很轻松地结合 AI 完成知识图谱的生成**。有关操作软件、使用 Python API 以及结合 AI 生成的详细说明见 [USEGE.md](./USAGE.md)
+其中使用 Python 绑定的方式可以**很轻松地结合 AI 完成知识图谱的生成**。有关操作软件、使用 Python API 的详细说明见 [USEGE.md](./USAGE.md)
 
 ## 兼容情况
 
