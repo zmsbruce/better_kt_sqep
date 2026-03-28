@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time};
+use std::{collections::{HashMap, HashSet}, time};
 
 use eframe::{
     App,
@@ -59,6 +59,13 @@ pub struct GraphApp {
 
     // 用于记录缩放比例和缩放中心
     zoom_factor: f32,
+
+    // 剪贴板 - 存储复制的节点信息 (内容, 类型, 附加类型, 位置, 入边, 出边)
+    clipboard_node: Option<(String, DistinctEntityType, HashSet<AddonEntityType>, (f64, f64), Vec<(u64, Relation)>, Vec<(u64, Relation)>)>,
+
+    // 中键拖动画布相关
+    middle_dragging: bool,
+    middle_drag_start_pos: Pos2,
 }
 
 impl Default for GraphApp {
@@ -90,6 +97,9 @@ impl Default for GraphApp {
             ),
             scroll_offset: Vec2::ZERO,
             zoom_factor: 1.0,
+            clipboard_node: None,
+            middle_dragging: false,
+            middle_drag_start_pos: Pos2::ZERO,
         }
     }
 }
@@ -122,49 +132,28 @@ impl App for GraphApp {
                 return;
             }
 
-            let scroll_area = egui::ScrollArea::both()
-                .auto_shrink([false, false])
-                .drag_to_scroll(false); // 禁用拖动滚动，避免与拖动节点冲突
+            // 直接在CentralPanel中处理，不使用ScrollArea
+            let painter = ui.painter();
 
-            let scroll_response = scroll_area.show(ui, |ui| {
-                // 计算内容边界以正确显示滚动条
-                let mut content_rect = Rect::NOTHING;
-                if let Some(graph) = self.graph.as_ref() {
-                    let snapshot = graph.current_snapshot();
-                    for node in snapshot.nodes.values() {
-                        let pos = self.node_screen_pos(node);
-                        let node_rect = Rect::from_center_size(pos, NODE_SIZE * self.zoom_factor);
-                        content_rect = content_rect.union(node_rect);
-                    }
-                }
-                content_rect = content_rect.expand(200.0); // 扩大一些边界，避免节点贴边
-                ui.expand_to_include_rect(content_rect); // 告诉UI内容区域大小
+            self.draw_edges_and_nodes(painter);
 
-                // 原有绘制和处理逻辑
-                let painter = ui.painter();
+            // 如果选中了节点，则突出显示
+            self.show_selected_node(painter);
 
-                self.draw_edges_and_nodes(painter);
+            // 如果选中了边，则突出显示
+            self.show_selected_edge(painter);
 
-                // 如果选中了节点，则突出显示
-                self.show_selected_node(painter);
+            // 如果正在拖动节点，则进行绘制
+            self.show_dragging_node(painter);
 
-                // 如果选中了边，则突出显示
-                self.show_selected_edge(painter);
+            // 如果鼠标悬停在节点或边上，则进行绘制
+            self.show_hovered_node(painter);
 
-                // 如果正在拖动节点，则进行绘制
-                self.show_dragging_node(painter);
+            // 如果鼠标悬停在边上，则进行绘制
+            self.show_hovered_edge(painter);
 
-                // 如果鼠标悬停在节点或边上，则进行绘制
-                self.show_hovered_node(painter);
-
-                // 如果鼠标悬停在边上，则进行绘制
-                self.show_hovered_edge(painter);
-
-                // 如果正在绘制边，则进行绘制
-                self.show_drawing_edge(ui, painter, ctx);
-            });
-
-            self.scroll_offset = scroll_response.state.offset;
+            // 如果正在绘制边，则进行绘制
+            self.show_drawing_edge(ui, painter, ctx);
 
             // 处理鼠标悬停事件
             self.process_hover(ui);
@@ -178,6 +167,12 @@ impl App for GraphApp {
             // 若鼠标左键抬起，则停止拖动节点
             self.process_primary_up(ui);
 
+            // 检测中键点击创建副本
+            self.process_middle_click(ui);
+
+            // 检测中键拖动画布
+            self.process_middle_drag(ui);
+
             // 检测删除
             self.process_keyboard_delete(ui);
 
@@ -186,6 +181,9 @@ impl App for GraphApp {
 
             // 处理缩放
             self.process_zoom(ctx);
+
+            // 处理系统剪贴板事件
+            self.process_clipboard_events(ctx);
 
             // 检测保存按键
             self.process_keyboard_save(ui);
@@ -216,14 +214,19 @@ impl GraphApp {
     }
 
     #[inline]
+    fn is_middle_dragging(&self) -> bool {
+        self.middle_dragging
+    }
+
+    #[inline]
     fn node_screen_pos(&self, node: &EntityNode) -> Pos2 {
         let content_pos = Pos2::new(node.coor.0 as f32, node.coor.1 as f32);
-        (content_pos * self.zoom_factor) - self.scroll_offset + Vec2::new(0.0, TOP_PANEL_HEIGHT)
+        (content_pos * self.zoom_factor) + self.scroll_offset + Vec2::new(0.0, TOP_PANEL_HEIGHT)
     }
 
     #[inline]
     fn screen_to_content(&self, screen_pos: Pos2) -> Pos2 {
-        (screen_pos - Vec2::new(0.0, TOP_PANEL_HEIGHT) + self.scroll_offset) / self.zoom_factor
+        (screen_pos - Vec2::new(0.0, TOP_PANEL_HEIGHT) - self.scroll_offset) / self.zoom_factor
     }
 
     fn draw_edges_and_nodes(&self, painter: &Painter) {
@@ -490,7 +493,7 @@ impl GraphApp {
                             return; // 退出窗口显示逻辑
                         }
                         // 检查 Ctrl + Enter 键：提交保存操作
-                        if ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command) {
+                        if ui.input(|i| i.key_pressed(egui::Key::Enter) && (i.modifiers.command || i.modifiers.ctrl)) {
                             dialog_error!(self, self.commit_edit(edit_id), &[], "保存节点失败");
                             return;
                         }
@@ -850,6 +853,101 @@ impl GraphApp {
         }
     }
 
+    fn process_middle_click(&mut self, ui: &egui::Ui) {
+        if self.graph.is_none() {
+            return;
+        }
+        
+        // 检测中键点击事件（只有在没有拖动画布的情况下才创建副本）
+        if ui.input(|i| i.pointer.button_released(egui::PointerButton::Middle)) && !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() && !self.middle_dragging {
+            if let Some(click_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                // 先收集需要的信息，避免借用冲突
+                let mut node_to_copy: Option<(u64, String, DistinctEntityType, Vec<AddonEntityType>, (f64, f64))> = None;
+                
+                {
+                    // 检查点击位置是否在节点区域
+                    let snapshot = self.graph.as_ref().unwrap().current_snapshot();
+                    for (id, node) in snapshot.nodes.iter() {
+                        let node_pos = self.node_screen_pos(node);
+                        let size = Vec2::new(NODE_SIZE.x, NODE_SIZE.y) * self.zoom_factor;
+                        let rect = Rect::from_center_size(node_pos, size);
+                        if rect.contains(click_pos) {
+                            // 在右侧创建副本
+                            let original_content_pos = Pos2::new(node.coor.0 as f32, node.coor.1 as f32);
+                            let copy_offset = Vec2::new(200.0, 0.0); // 在右侧200像素处创建副本
+                            let copy_pos = original_content_pos + copy_offset;
+                            
+                            let addon_vec: Vec<AddonEntityType> = node.addon_types.iter().cloned().collect();
+                            node_to_copy = Some((
+                                *id,
+                                node.content.clone(),
+                                node.distinct_type,
+                                addon_vec,
+                                (copy_pos.x as f64, copy_pos.y as f64),
+                            ));
+                            break;
+                        }
+                    }
+                }
+                
+                // 如果找到了要复制的节点，执行复制操作
+                if let Some((original_id, content, distinct_type, addon_vec, copy_pos)) = node_to_copy {
+                    // 创建节点副本
+                    let new_id = self.graph.as_mut().unwrap().add_entity(
+                        content,
+                        distinct_type,
+                        &addon_vec,
+                        copy_pos,
+                    );
+                    
+                    // 建立从原节点到新节点的关系（默认使用顺序关系）
+                    dialog_error!(
+                        self,
+                        self.graph.as_mut().unwrap().add_edge(original_id, new_id, Relation::Order),
+                        &[],
+                        "创建节点关系失败"
+                    );
+                    
+                    // 选中新创建的节点
+                    self.selected_node = Some(new_id);
+                    self.info = ("已创建节点副本".to_string(), time::Instant::now());
+                }
+            }
+        }
+    }
+
+    fn process_middle_drag(&mut self, ui: &egui::Ui) {
+        if self.graph.is_none() {
+            return;
+        }
+
+        // 检测中键按下开始准备拖动
+        if ui.input(|i| i.pointer.button_pressed(egui::PointerButton::Middle)) && !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                self.middle_drag_start_pos = pos;
+                // 注意：这里不立即设置middle_dragging为true，而是等到实际拖动时再设置
+            }
+        }
+
+        // 处理中键拖动过程
+        if ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle)) && !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
+            if let Some(current_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let drag_delta = current_pos - self.middle_drag_start_pos;
+                // 只有当拖动距离超过阈值时才认为是拖动操作
+                if drag_delta.length() > 5.0 || self.middle_dragging {
+                    self.middle_dragging = true;
+                    self.scroll_offset += drag_delta; // 拖动方向和画布移动方向相同
+                    self.middle_drag_start_pos = current_pos;
+                }
+            }
+        }
+
+        // 检测中键释放停止拖动
+        if ui.input(|i| i.pointer.button_released(egui::PointerButton::Middle)) {
+            self.middle_dragging = false;
+        }
+    }
+
     fn process_zoom(&mut self, ctx: &Context) {
         let zoom_delta = ctx.input(|i| i.zoom_delta());
         if (zoom_delta - 1.0).abs() > f32::EPSILON && ctx.input(|i| i.pointer.hover_pos()).is_some()
@@ -857,6 +955,102 @@ impl GraphApp {
             self.zoom_factor *= zoom_delta;
             self.zoom_factor = self.zoom_factor.clamp(0.5, 3.0);
         }
+    }
+
+    fn process_clipboard_events(&mut self, ctx: &Context) {
+        if self.graph.is_none() {
+            return;
+        }
+
+        // 处理系统复制事件
+        ctx.input(|i| {
+            for event in &i.events {
+                match event {
+                    egui::Event::Copy => {
+                        if !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
+                            if let Some(selected_node) = self.selected_node {
+                                let snapshot = self.graph.as_ref().unwrap().current_snapshot();
+                                if let Some(node) = snapshot.nodes.get(&selected_node) {
+                                    // 收集所有入边（父节点到此节点）
+                                    let mut incoming_edges = Vec::new();
+                                    // 收集所有出边（此节点到子节点）
+                                    let mut outgoing_edges = Vec::new();
+                                    
+                                    for ((from, to), relation) in snapshot.edges.iter() {
+                                        if *to == selected_node {
+                                            // 入边：其他节点指向此节点
+                                            incoming_edges.push((*from, *relation));
+                                        } else if *from == selected_node {
+                                            // 出边：此节点指向其他节点
+                                            outgoing_edges.push((*to, *relation));
+                                        }
+                                    }
+                                    
+                                    self.clipboard_node = Some((
+                                        node.content.clone(),
+                                        node.distinct_type,
+                                        node.addon_types.iter().cloned().collect(),
+                                        node.coor, // 保存原始位置
+                                        incoming_edges,
+                                        outgoing_edges,
+                                    ));
+                                    self.info = ("节点已复制（含关系）".to_string(), time::Instant::now());
+                                }
+                            }
+                        }
+                    }
+                    egui::Event::Paste(_text) => {
+                        // 对于系统粘贴事件，我们不处理文本内容，因为我们有自己的复制粘贴逻辑
+                        // 只有在有剪贴板内容时才处理
+                        if !self.is_editing() && !self.is_linking_edge() && !self.is_dragging() {
+                            if let Some((content, distinct_type, addon_types, original_pos, incoming_edges, outgoing_edges)) = &self.clipboard_node {
+                                if let Some(graph) = self.graph.as_mut() {
+                                    // 在源节点附近粘贴（向右下偏移50像素）
+                                    let paste_pos = (original_pos.0 + 50.0, original_pos.1 + 50.0);
+                                    let addon_vec: Vec<AddonEntityType> = addon_types.iter().cloned().collect();
+                                    let new_id = graph.add_entity(
+                                        content.clone(),
+                                        *distinct_type,
+                                        &addon_vec,
+                                        paste_pos,
+                                    );
+
+                                    // 重新建立边关系
+                                    let snapshot = graph.current_snapshot();
+                                    let mut edges_to_add = Vec::new();
+                                    
+                                    // 处理入边：如果父节点仍然存在，重新建立关系
+                                    for (parent_id, relation) in incoming_edges {
+                                        if snapshot.nodes.contains_key(parent_id) {
+                                            edges_to_add.push((*parent_id, new_id, *relation));
+                                        }
+                                    }
+                                    
+                                    // 处理出边：如果子节点仍然存在，重新建立关系
+                                    for (child_id, relation) in outgoing_edges {
+                                        if snapshot.nodes.contains_key(child_id) {
+                                            edges_to_add.push((new_id, *child_id, *relation));
+                                        }
+                                    }
+                                    
+                                    // 批量添加边
+                                    for (from, to, relation) in edges_to_add {
+                                        if let Err(e) = graph.add_edge(from, to, relation) {
+                                            // 如果添加边失败，记录错误但继续
+                                            eprintln!("添加边失败: {} -> {}, 错误: {}", from, to, e);
+                                        }
+                                    }
+
+                                    self.selected_node = Some(new_id);
+                                    self.info = ("节点已粘贴（含关系）".to_string(), time::Instant::now());
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
     }
 
     fn process_keyboard_delete(&mut self, ui: &egui::Ui) {
@@ -879,7 +1073,7 @@ impl GraphApp {
     }
 
     fn process_keyboard_save(&mut self, ui: &egui::Ui) {
-        if ui.input(|i| i.key_pressed(egui::Key::S) && i.modifiers.command) {
+        if ui.input(|i| i.key_pressed(egui::Key::S) && (i.modifiers.command || i.modifiers.ctrl)) {
             if let Some(graph) = self.graph.as_mut() {
                 if let Err(e) = graph.save() {
                     self.error = Some((
@@ -901,7 +1095,7 @@ impl GraphApp {
         }
 
         // 检测撤销
-        if ui.input(|i| i.key_pressed(egui::Key::Z) && i.modifiers.command)
+        if ui.input(|i| i.key_pressed(egui::Key::Z) && (i.modifiers.command || i.modifiers.ctrl))
             && !self.is_editing()
             && !self.is_linking_edge()
             && !self.is_dragging()
@@ -915,7 +1109,7 @@ impl GraphApp {
         }
 
         // 检测重做
-        if ui.input(|i| i.key_pressed(egui::Key::Y) && i.modifiers.command)
+        if ui.input(|i| i.key_pressed(egui::Key::Y) && (i.modifiers.command || i.modifiers.ctrl))
             && !self.is_editing()
             && !self.is_linking_edge()
             && !self.is_dragging()
@@ -1267,6 +1461,106 @@ impl GraphApp {
                     dialog_error!(self, graph.redo(), &[GraphError::NothingToRedo], "恢复失败");
                 }
             }
+
+            // 添加复制按钮
+            if ui
+                .add_sized(
+                    icon_size,
+                    egui::ImageButton::new(egui::include_image!(
+                        "../assets/copy_35dp_5985E1_FILL0_wght400_GRAD0_opsz40.svg"
+                    ))
+                )
+                .on_hover_text("复制选中的节点 (Ctrl+C)")
+                .clicked() && self.selected_node.is_some()
+            {
+                if let Some(selected_node) = self.selected_node {
+                    if let Some(graph) = self.graph.as_ref() {
+                        let snapshot = graph.current_snapshot();
+                        if let Some(node) = snapshot.nodes.get(&selected_node) {
+                            // 收集所有入边（父节点到此节点）
+                            let mut incoming_edges = Vec::new();
+                            // 收集所有出边（此节点到子节点）
+                            let mut outgoing_edges = Vec::new();
+                            
+                            for ((from, to), relation) in snapshot.edges.iter() {
+                                if *to == selected_node {
+                                    // 入边：其他节点指向此节点
+                                    incoming_edges.push((*from, *relation));
+                                } else if *from == selected_node {
+                                    // 出边：此节点指向其他节点
+                                    outgoing_edges.push((*to, *relation));
+                                }
+                            }
+                            
+                            self.clipboard_node = Some((
+                                node.content.clone(),
+                                node.distinct_type,
+                                node.addon_types.iter().cloned().collect(),
+                                node.coor, // 保存原始位置
+                                incoming_edges,
+                                outgoing_edges,
+                            ));
+                            self.info = ("节点已复制（含关系）".to_string(), time::Instant::now());
+                        }
+                    }
+                }
+            }
+
+            // 添加粘贴按钮
+            if ui
+                .add_sized(
+                    icon_size,
+                    egui::ImageButton::new(egui::include_image!(
+                        "../assets/paste_35dp_5985E1_FILL0_wght400_GRAD0_opsz40.svg"
+                    ))
+                )
+                .on_hover_text("粘贴节点 (Ctrl+V)")
+                .clicked() && self.clipboard_node.is_some()
+            {
+                if let Some((content, distinct_type, addon_types, original_pos, incoming_edges, outgoing_edges)) = &self.clipboard_node {
+                    if let Some(graph) = self.graph.as_mut() {
+                        // 在源节点附近粘贴（向右下偏移50像素）
+                        let paste_pos = (original_pos.0 + 50.0, original_pos.1 + 50.0);
+                        let addon_vec: Vec<AddonEntityType> = addon_types.iter().cloned().collect();
+                        let new_id = graph.add_entity(
+                            content.clone(),
+                            *distinct_type,
+                            &addon_vec,
+                            paste_pos,
+                        );
+
+                        // 重新建立边关系
+                        let snapshot = graph.current_snapshot();
+                        let mut edges_to_add = Vec::new();
+                        
+                        // 处理入边：如果父节点仍然存在，重新建立关系
+                        for (parent_id, relation) in incoming_edges {
+                            if snapshot.nodes.contains_key(parent_id) {
+                                edges_to_add.push((*parent_id, new_id, *relation));
+                            }
+                        }
+                        
+                        // 处理出边：如果子节点仍然存在，重新建立关系
+                        for (child_id, relation) in outgoing_edges {
+                            if snapshot.nodes.contains_key(child_id) {
+                                edges_to_add.push((new_id, *child_id, *relation));
+                            }
+                        }
+                        
+                        // 批量添加边
+                        for (from, to, relation) in edges_to_add {
+                            if let Err(e) = graph.add_edge(from, to, relation) {
+                                // 如果添加边失败，记录错误但继续
+                                eprintln!("添加边失败: {} -> {}, 错误: {}", from, to, e);
+                            }
+                        }
+
+                        self.selected_node = Some(new_id);
+                        self.info = ("节点已粘贴（含关系）".to_string(), time::Instant::now());
+                    }
+                }
+            }
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let (info, last_update_time) = &self.info;
                 if time::Instant::now() - *last_update_time < time::Duration::from_secs(1) {
